@@ -27,6 +27,8 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 import argparse
 import os
 import sys
+import tempfile
+import filecmp
 from pathlib import Path
 
 
@@ -183,21 +185,76 @@ Examples:
         print(f"Generating source: {args.output_source}")
     source_content = generate_from_template(source_template, substitutions)
 
-    # Write output files
+    # Write output files (only if changed)
     try:
-        with open(args.output_header, 'w') as f:
-            f.write(header_content)
+        # Write to temporary files first
+        with tempfile.NamedTemporaryFile(mode='w', delete=False, suffix='.h') as temp_header:
+            temp_header_path = temp_header.name
+            temp_header.write(header_content)
 
-        with open(args.output_source, 'w') as f:
-            f.write(source_content)
+        with tempfile.NamedTemporaryFile(mode='w', delete=False, suffix='.cpp') as temp_source:
+            temp_source_path = temp_source.name
+            temp_source.write(source_content)
 
+        # Compare and update header if different
+        header_updated = False
+        if os.path.exists(args.output_header):
+            if filecmp.cmp(temp_header_path, args.output_header, shallow=False):
+                if args.verbose:
+                    print(f"Header unchanged: {args.output_header}")
+                os.unlink(temp_header_path)
+            else:
+                os.replace(temp_header_path, args.output_header)
+                header_updated = True
+                if args.verbose:
+                    print(f"Header updated: {args.output_header}")
+        else:
+            os.replace(temp_header_path, args.output_header)
+            header_updated = True
+            if args.verbose:
+                print(f"Header created: {args.output_header}")
+
+        # Compare and update source if different
+        source_updated = False
+        if os.path.exists(args.output_source):
+            if filecmp.cmp(temp_source_path, args.output_source, shallow=False):
+                if args.verbose:
+                    print(f"Source unchanged: {args.output_source}")
+                os.unlink(temp_source_path)
+            else:
+                os.replace(temp_source_path, args.output_source)
+                source_updated = True
+                if args.verbose:
+                    print(f"Source updated: {args.output_source}")
+        else:
+            os.replace(temp_source_path, args.output_source)
+            source_updated = True
+            if args.verbose:
+                print(f"Source created: {args.output_source}")
+
+        # Summary message
         if args.verbose:
             print("Generation complete!")
         else:
-            print(f"Generated {args.output_header} and {args.output_source}")
+            if header_updated or source_updated:
+                status = []
+                if header_updated:
+                    status.append("header")
+                if source_updated:
+                    status.append("source")
+                print(f"Updated {' and '.join(status)}: {args.output_header}, {args.output_source}")
+            else:
+                print(f"No changes: {args.output_header}, {args.output_source}")
 
     except Exception as e:
         print(f"Error writing output files: {e}", file=sys.stderr)
+        # Clean up temporary files if they still exist
+        for temp_file in [temp_header_path, temp_source_path]:
+            if temp_file and os.path.exists(temp_file):
+                try:
+                    os.unlink(temp_file)
+                except:
+                    pass
         sys.exit(1)
 
 
