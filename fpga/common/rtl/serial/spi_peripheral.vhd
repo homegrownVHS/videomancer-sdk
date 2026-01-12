@@ -89,6 +89,7 @@ architecture rtl of spi_peripheral is
     signal s_start_reg     : std_logic := '0';
     signal s_last_addr_bit : std_logic := '0';  -- Pre-computed s_bit_count = ADDR_WIDTH - 1
     signal s_last_data_bit : std_logic := '0';  -- Pre-computed s_bit_count = DATA_WIDTH - 1
+    signal s_addr_at_max   : std_logic := '0';  -- Pre-computed address at maximum value
 
 begin
     u_sync_to_clk_sdi  : entity work.sync_slv port map(clk => clk, a(0) => sdi, b(0) => s_sdi);
@@ -114,6 +115,9 @@ begin
 
             -- Pre-compute bit count comparisons (breaks critical path)
             s_last_addr_bit <= '1' when s_bit_count = (ADDR_WIDTH - 1) else '0';
+
+            -- Pre-compute address at maximum check for auto-increment logic
+            s_addr_at_max <= '1' when s_addr_buf = (2**ADDR_WIDTH - 1) else '0';
             s_last_data_bit <= '1' when s_bit_count = (DATA_WIDTH - 1) else '0';
         end if;
     end process;
@@ -164,7 +168,16 @@ begin
                         s_state     <= WAITING_WRITE;
 
                     when WAITING_WRITE =>
-                        s_state <= IDLE;
+                        -- Auto-increment address for bulk writes
+                        if s_addr_at_max = '1' then
+                            -- At maximum address, end transaction
+                            s_state <= IDLE;
+                        else
+                            -- Increment address and continue receiving data
+                            s_addr_buf <= s_addr_buf + 1;
+                            addr       <= s_addr_buf + 1;
+                            s_state    <= RECEIVING_DATA;
+                        end if;
 
                     when RECEIVING_ADDRESS =>
                         if s_input_en_reg = '1' then
@@ -202,7 +215,17 @@ begin
                         if s_output_en_reg = '1' then
                             s_sdo_state <= s_data_buf(DATA_WIDTH - 1 - to_integer(s_bit_count));
                             if s_last_data_bit = '1' then
-                                s_state <= IDLE;
+                                -- Auto-increment address for bulk reads
+                                if s_addr_at_max = '1' then
+                                    -- At maximum address, end transaction
+                                    s_state <= IDLE;
+                                else
+                                    -- Increment address and continue reading
+                                    s_addr_buf <= s_addr_buf + 1;
+                                    addr       <= s_addr_buf + 1;
+                                    rd_en      <= '1';
+                                    s_state    <= REQUESTING_READ;
+                                end if;
                             else
                                 s_bit_count <= s_bit_count + to_unsigned(1, DATA_WIDTH);
                             end if;
