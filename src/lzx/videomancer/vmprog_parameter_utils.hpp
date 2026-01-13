@@ -497,25 +497,28 @@ namespace lzx {
         // Apply control curve
         const uint16_t curved = apply_parameter_control_curve(value, config.control_mode);
 
-        // Scale from 0-1023 to display min/max range using fixed-point math
-        // Formula: display_min + (curved * (display_max - display_min)) / 1023
+        // Scale from 0-1023 to display min/max range with fractional precision
+        // Formula: (display_min + (curved * (display_max - display_min)) / 1023) * 10^digits
+        // This expands the range to include fractional precision specified by display_float_digits
         const int32_t display_range = config.display_max_value - config.display_min_value;
-        const int32_t scaled_int = config.display_min_value + ((static_cast<int32_t>(curved) * display_range) / 1023);
+        const uint32_t multiplier = (config.display_float_digits < 7) ? vmprog_parameter_display_divisor_lut[config.display_float_digits] : 1000000;
+
+        // Scale to expanded range: multiply display values by 10^display_float_digits
+        const int32_t expanded_min = config.display_min_value * static_cast<int32_t>(multiplier);
+        const int32_t expanded_range = display_range * static_cast<int32_t>(multiplier);
+        const int32_t scaled_with_frac = expanded_min + ((static_cast<int32_t>(curved) * expanded_range) / 1023);
 
         // Handle sign
         size_t pos = 0;
-        if (scaled_int < 0) {
+        if (scaled_with_frac < 0) {
             out_str[pos++] = '-';
         }
         // Safe conversion to unsigned (handles INT32_MIN correctly)
-        const uint32_t abs_value = (scaled_int < 0) ? static_cast<uint32_t>(-(static_cast<int64_t>(scaled_int))) : static_cast<uint32_t>(scaled_int);
+        const uint32_t abs_value = (scaled_with_frac < 0) ? static_cast<uint32_t>(-(static_cast<int64_t>(scaled_with_frac))) : static_cast<uint32_t>(scaled_with_frac);
 
-        // Calculate integer and fractional parts based on display_float_digits
-        // Use lookup table for divisors (10^n) - eliminates multiplication loop
-        const uint32_t divisor = (config.display_float_digits < 7) ? vmprog_parameter_display_divisor_lut[config.display_float_digits] : 1000000;
-
-        const uint32_t integer_part = abs_value / divisor;
-        const uint32_t fractional_part = abs_value % divisor;
+        // Calculate integer and fractional parts
+        const uint32_t integer_part = abs_value / multiplier;
+        const uint32_t fractional_part = abs_value % multiplier;
 
         // Write integer part
         char temp_buf[12];
