@@ -482,11 +482,22 @@ namespace lzx {
     {
         if (out_str_size == 0) return;
 
+        // Normalize input value from [min_value, max_value] to [0, 1023]
+        // Clamp to valid range first
+        const int32_t clamped_value = (value < config.min_value) ? config.min_value : 
+                                       (value > config.max_value) ? config.max_value : value;
+        
+        // Scale to 0-1023 range with rounding
+        const int32_t param_range = config.max_value - config.min_value;
+        const int32_t normalized = (param_range > 0) ? 
+            ((clamped_value - config.min_value) * 1023 + param_range / 2) / param_range : 0;
+
         // Handle discrete value labels first
         if (config.value_label_count >= 2)
         {
             // Use discrete value labels if defined
-            const uint16_t index = (clamp_u16(value, 0, 1023) * (config.value_label_count - 1)) / 1023;
+            // Add rounding: (value * scale + divisor/2) / divisor ensures proper midpoint behavior
+            const uint16_t index = static_cast<uint16_t>((normalized * (config.value_label_count - 1) + 511) / 1023);
             const char* label = config.value_labels[index];
             fast_strcpy(out_str, label, out_str_size);
             return;
@@ -494,8 +505,8 @@ namespace lzx {
 
         // No discrete labels - proceed with scaling and formatting
 
-        // Apply control curve
-        const uint16_t curved = apply_parameter_control_curve(value, config.control_mode);
+        // Apply control curve (expects 0-1023 range)
+        const uint16_t curved = apply_parameter_control_curve(normalized, config.control_mode);
 
         // Scale from 0-1023 to display min/max range with fractional precision
         // Formula: (display_min + (curved * (display_max - display_min)) / 1023) * 10^digits
