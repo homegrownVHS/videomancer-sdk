@@ -111,6 +111,17 @@ parse_toml_array() {
     fi
 }
 
+# MacOS comes with a version of grep that does not support PCRE
+# GNU grep is installed during setup and aliased to ggrep to avoid conflicts
+case "$(uname -s)" in
+    Darwin*)
+        SEARCH=ggrep
+        ;;
+    *)
+	SEARCH=grep
+        ;;
+esac
+
 # Function to extract timing and resource information from nextpnr build log
 # Args: $1 = log file path
 parse_build_stats() {
@@ -131,10 +142,10 @@ parse_build_stats() {
     fi
 
     # Extract max frequency from timing analysis (look for critical path max frequency)
-    max_freq=$(grep -oP 'Max frequency for clock.*?:\s+\K[0-9.]+' "$log_file" | head -n1)
+    max_freq=$($SEARCH -oP 'Max frequency for clock.*?:\s+\K[0-9.]+' "$log_file" | head -n1)
     if [ -z "$max_freq" ]; then
         # Alternative pattern for max frequency
-        max_freq=$(grep -oP 'Max delay.*?=.*?\K[0-9.]+(?=\s+MHz)' "$log_file" | head -n1)
+        max_freq=$($SEARCH -oP 'Max delay.*?=.*?\K[0-9.]+(?=\s+MHz)' "$log_file" | head -n1)
     fi
 
     # Extract resource utilization with both used and max values
@@ -148,28 +159,28 @@ parse_build_stats() {
     # Info:            SB_WARMBOOT:     0/    1     0%
 
     # Extract used/max for each resource type
-    local lc_line=$(grep 'ICESTORM_LC:' "$log_file" | head -n1)
+    local lc_line=$($SEARCH 'ICESTORM_LC:' "$log_file" | head -n1)
     if [ -n "$lc_line" ]; then
-        luts=$(echo "$lc_line" | grep -oP 'ICESTORM_LC:\s+\K[0-9]+')
-        luts_max=$(echo "$lc_line" | grep -oP 'ICESTORM_LC:\s+[0-9]+/\s*\K[0-9]+')
+        luts=$(echo "$lc_line" | $SEARCH -oP 'ICESTORM_LC:\s+\K[0-9]+')
+        luts_max=$(echo "$lc_line" | $SEARCH -oP 'ICESTORM_LC:\s+[0-9]+/\s*\K[0-9]+')
     fi
 
-    local io_line=$(grep 'SB_IO:' "$log_file" | head -n1)
+    local io_line=$($SEARCH 'SB_IO:' "$log_file" | head -n1)
     if [ -n "$io_line" ]; then
-        ios=$(echo "$io_line" | grep -oP 'SB_IO:\s+\K[0-9]+')
-        ios_max=$(echo "$io_line" | grep -oP 'SB_IO:\s+[0-9]+/\s*\K[0-9]+')
+        ios=$(echo "$io_line" | $SEARCH -oP 'SB_IO:\s+\K[0-9]+')
+        ios_max=$(echo "$io_line" | $SEARCH -oP 'SB_IO:\s+[0-9]+/\s*\K[0-9]+')
     fi
 
-    local ram_line=$(grep 'ICESTORM_RAM:' "$log_file" | head -n1)
+    local ram_line=$($SEARCH 'ICESTORM_RAM:' "$log_file" | head -n1)
     if [ -n "$ram_line" ]; then
-        brams=$(echo "$ram_line" | grep -oP 'ICESTORM_RAM:\s+\K[0-9]+')
-        brams_max=$(echo "$ram_line" | grep -oP 'ICESTORM_RAM:\s+[0-9]+/\s*\K[0-9]+')
+        brams=$(echo "$ram_line" | $SEARCH -oP 'ICESTORM_RAM:\s+\K[0-9]+')
+        brams_max=$(echo "$ram_line" | $SEARCH -oP 'ICESTORM_RAM:\s+[0-9]+/\s*\K[0-9]+')
     fi
 
-    local pll_line=$(grep 'ICESTORM_PLL:' "$log_file" | head -n1)
+    local pll_line=$($SEARCH 'ICESTORM_PLL:' "$log_file" | head -n1)
     if [ -n "$pll_line" ]; then
-        plbs=$(echo "$pll_line" | grep -oP 'ICESTORM_PLL:\s+\K[0-9]+')
-        plbs_max=$(echo "$pll_line" | grep -oP 'ICESTORM_PLL:\s+[0-9]+/\s*\K[0-9]+')
+        plbs=$(echo "$pll_line" | $SEARCH -oP 'ICESTORM_PLL:\s+\K[0-9]+')
+        plbs_max=$(echo "$pll_line" | $SEARCH -oP 'ICESTORM_PLL:\s+[0-9]+/\s*\K[0-9]+')
     fi
 
     # Build output string with available information

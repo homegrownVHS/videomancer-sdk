@@ -65,6 +65,9 @@ elif [ "${OS_TYPE}" = "macOS" ]; then
     fi
 
     echo -e "${GREEN}Installing build dependencies...${NC}"
+    brew install grep || {
+        echo -e "${YELLOW}Warning: grep installation failed or already installed${NC}"
+    }
     brew install --cask gcc-arm-embedded || {
         echo -e "${YELLOW}Warning: gcc-arm-embedded installation failed or already installed${NC}"
     }
