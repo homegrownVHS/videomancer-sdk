@@ -211,6 +211,15 @@ else
 fi
 echo ""
 
+# Check Python PIL dependency required by build-time tools/hooks
+if ! python3 -c "from PIL import Image" 2>/dev/null; then
+    echo -e "${RED}ERROR: Missing Python PIL module (Pillow)${NC}"
+    echo -e "${YELLOW}Install one of:${NC}"
+    echo -e "${YELLOW}  sudo apt install python3-pil${NC}"
+    echo -e "${YELLOW}  python3 -m pip install --user pillow${NC}"
+    exit 1
+fi
+
 # Check for OSS CAD Suite
 if [ ! -d "build/oss-cad-suite" ]; then
     echo -e "${RED}ERROR: OSS CAD Suite not found!${NC}"
