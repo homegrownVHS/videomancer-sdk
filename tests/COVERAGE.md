@@ -3,289 +3,251 @@
 ## Summary
 
 **Test Suite Status**: ✅ All tests passing
-
 **Total C++ Unit Tests**: 118 tests across 6 test suites
-
+**VHDL Unit Tests**: 23 tests across 4 test suites
 **Python Tests**: 2 test modules
-
 **Shell Tests**: 2 integration tests
-
 **Header Coverage**: 8/9 headers (89%)
-
 **Last Updated**: 2025-12-15
 
 ## C++ Header Coverage
 
 | Header File | Test Suite | Tests | Status |
-
 |------------|------------|-------|--------|
-
 | `videomancer_abi.hpp` | test_videomancer_abi | 6 | ✅ Passed |
-
 | `videomancer_fpga.hpp` | (tested via mock) | - | ✅ Covered |
-
 | `videomancer_fpga_controller.hpp` | test_videomancer_fpga_controller | 11 | ✅ Passed |
-
 | `videomancer_sdk_version.hpp` | - | - | ⚠️ Not tested |
-
 | `vmprog_crypto.hpp` | test_vmprog_crypto | 15 | ✅ Passed |
-
 | `vmprog_format.hpp` | test_vmprog_format | 41 | ✅ Passed |
-
 | `vmprog_public_keys.hpp` | test_vmprog_public_keys | 8 | ✅ Passed |
-
 | `vmprog_stream.hpp` | (tested via mock) | - | ✅ Covered |
-
 | `vmprog_stream_reader.hpp` | test_vmprog_stream_reader | 37 | ✅ Passed |
 
 ## Test Suite Details
 
 ### test_vmprog_crypto (15 tests)
-
 Validates cryptographic operations:
-
 - ✅ SHA-256/BLAKE2b-256 initialization
-
 - ✅ Incremental hashing with updates
-
 - ✅ One-shot hashing
-
 - ✅ Hash determinism
-
 - ✅ Large data hashing
-
 - ✅ Constant-time comparison
-
 - ✅ Secure memory wiping
-
 - ✅ Ed25519 signature verification (RFC 8032 test vector 1)
-
 - ✅ Ed25519 RFC 8032 test vectors 2 & 3 (1-byte and 2-byte messages)
-
 - ✅ Ed25519 corrupted signature rejection
-
 - ✅ Ed25519 API safety test
-
 - ✅ Helper: verify_hash with valid/invalid hashes
-
 - ✅ Helper: is_hash_zero detection
-
 - ✅ Helper: secure_compare_hash functionality
-
 - ✅ Helper: is_pubkey_valid validation
 
 **Note**: The SDK now uses standard Ed25519 (SHA-512) via `crypto_ed25519_check` from monocypher, which is RFC 8032 compliant. All test vectors are from RFC 8032.
 
 ### test_videomancer_abi (6 tests)
-
 Validates ABI constants and register addresses:
-
 - ✅ Rotary potentiometer register addresses (6)
-
 - ✅ Linear potentiometer register address
-
 - ✅ Toggle switch register address and bit positions
+- ✅ Toggle switch bit masks (non-overlapping)
+- ✅ Video timing IDs (uniqueness within 4-bit range)
+- ✅ Video timing ID completeness (all 16 values covered)
 
-- ✅ Video timing registe41 tests)
-
+### test_vmprog_format (41 tests)
 Validates VMProg format structures and utilities:
 
-**Core Structure Tests (11 tests)**
+**Core Structure Tests (4 tests)**
+- ✅ Struct sizes (header=64B, TOC entry=64B, config=7372B)
+- ✅ Magic number validation (0x47504D56)
+- ✅ Enum sizes (all 32-bit)
+- ✅ Validation result values (ok=0, all error codes unique)
 
-- ✅ Header struct size (12 bytes)
+**String Helper Tests (5 tests)**
+- ✅ safe_strncpy: normal copy, truncation, empty string
+- ✅ is_string_terminated: null-terminated vs non-terminated
+- ✅ safe_strlen: correct length for terminated/non-terminated/empty
+- ✅ is_string_empty: empty string detection, zero-size buffer
+- ✅ safe_strcmp: equal/different strings, different buffer sizes
 
-- ✅ TOC entry struct size (8 bytes)
+**Utility Function Tests (5 tests)**
+- ✅ Enum bitwise operators: OR, AND, NOT, XOR, |=
+- ✅ Endianness conversion (32/16-bit round-trip LE)
+- ✅ is_package_signed: signed vs unsigned headers
+- ✅ Validation result to string conversion
+- ✅ get_public_key_count returns non-zero
 
-- ✅ Config struct size (4 bytes)
+**Initialization Tests (3 tests)**
+- ✅ Header initialization (magic, version, header_size)
+- ✅ TOC entry initialization (type=none, flags=none, reserved=0)
+- ✅ Program config initialization (zeros counts and strings)
 
-- ✅ Magic number validation (0x564D5052)
+**Header Validation Tests (3 tests)**
+- ✅ Invalid magic number detection
+- ✅ Invalid version detection
+- ✅ Valid header acceptance
 
-- ✅ Header initialization
+**TOC Entry Validation Tests (2 tests)**
+- ✅ Rejects type=none
+- ✅ Rejects offset+size > file_size (overflow)
 
-- ✅ TOC entry initialization
+**Artifact Hash Validation (2 tests)**
+- ✅ Valid artifact hash acceptance
+- ✅ Invalid artifact type rejection
 
-- ✅ Config initialization
+**Signed Descriptor Validation (2 tests)**
+- ✅ Max artifact count (8) acceptance
+- ✅ Non-zeroed unused slots rejection
 
-- ✅ Safe string copying with truncation
+**Parameter Validation (4 tests)**
+- ✅ Invalid range (max < min) rejection
+- ✅ Initial value out of range rejection
+- ✅ Non-null-terminated string rejection
+- ✅ Excessive value labels (> 16) rejection
 
-- ✅ Header validation (valid/invalid)
+**Program Config Validation (3 tests)**
+- ✅ Excessive parameter count (> 12) rejection
+- ✅ Zero ABI version rejection
+- ✅ No hardware flags (hw_mask=none) rejection
 
-- ✅ TOC entry validation (valid/invalid)
+**TOC Query Functions (2 tests)**
+- ✅ has_toc_entry: finds/misses entries by type
+- ✅ count_toc_entries: counts entries of a given type
 
-- ✅ Config validation (valid/invalid)
+**Additional Init Tests (2 tests)**
+- ✅ Signed descriptor initialization (zeroed artifact count, flags, SHA-256)
+- ✅ Parameter config initialization (parameter_id=none, control_mode=linear)
 
-**Additional Validation Tests (21 tests)**
+**Edge Cases (4 tests)**
+- ✅ safe_strncpy exact buffer fit with null terminator
+- ✅ safe_strncpy zero-size buffer leaves dest unchanged
+- ✅ Header file_size mismatch detection
+- ✅ TOC extending past file end detection
 
-- ✅ String helpers: safe_strncpy, safe_strnlen
-
-- ✅ Enum operators: BitstreamTy37 tests)
-
+### test_vmprog_stream_reader (37 tests)
 Validates stream-based reading and integration workflows:
 
-**Core Stream Tests (9 tests)**
+**Core Stream Tests (2 tests)**
+- ✅ Stream seeking (position + data verification)
+- ✅ Stream read beyond end (partial read)
 
-- ✅ Stream read operations
+**Header Reading (3 tests)**
+- ✅ Header reading from stream (byte-exact match)
+- ✅ Read + validate header in one call
+- ✅ Header file_size vs actual size mismatch detection
 
-- ✅ Stream seek operations
+**TOC Reading (2 tests)**
+- ✅ Read 2 TOC entries with correct types
+- ✅ Buffer too small rejection
 
-- ✅ Header reading
+**Payload Reading (2 tests)**
+- ✅ Read payload by TOC offset (content verification)
+- ✅ Buffer too small rejection
 
-- ✅ TOC entry reading
+**Verified Reading (2 tests)**
+- ✅ Read payload and verify SHA-256 hash match
+- ✅ Corrupted payload rejection (wrong hash)
 
-- ✅ Payload reading
+**Config Reading (2 tests)**
+- ✅ Read config struct from mock package
+- ✅ Read + validate config
 
-- ✅ Buffer size validation
+**Signed Descriptor Reading (2 tests)**
+- ✅ Read descriptor (artifact count + build_id verification)
+- ✅ Read + validate signed descriptor
 
-- ✅ Stream boundary conditions
+**Signature Reading (1 test)**
+- ✅ Read 64-byte signature (pattern verification)
 
-- ✅ Invalid data handling
+**Integration Tests (2 tests)**
+- ✅ verify_with_builtin_keys rejects dummy signature
+- ✅ Complete package workflow: header → TOC → config → descriptor
 
-- ✅ Large payload support
+**Invalid Size Handling (3 tests)**
+- ✅ Config with wrong TOC size field rejection
+- ✅ Descriptor with wrong TOC size rejection
+- ✅ Signature with size ≠ 64 rejection
 
-**Integration Tests with Mock Packages (19 tests)**
+**TOC Edge Cases (2 tests)**
+- ✅ toc_count=0 acceptance
+- ✅ Max TOC entries acceptance
 
-- ✅ Mock package creation: config, signed descriptors, signatures
+**Payload Edge Cases (6 tests)**
+- ✅ Zero-length payload acceptance
+- ✅ Corrupted magic in header detection
+- ✅ Duplicate config entries detection
+- ✅ Auto-seek to correct offset
+- ✅ All 7 bitstream type variants reading
+- ✅ Payload with all-zero hash rejection
 
-- ✅ Config reading: valid/invalid sizes, content verification
+**Config & Descriptor Edge Cases (3 tests)**
+- ✅ Empty program_id rejection
+- ✅ Artifact count overflow (255 > max 8) rejection
+- ✅ Config ABI range validation (max < min)
 
-- ✅ Signed descriptor reading: all bitstream types (SD/HD analog/HDMI/dual, generic)
-
-- ✅ Signature reading: Ed25519 signature verification
-
-- ✅ Payload verification: hash computation and validation
-
-- ✅ Complete workflows: read config → descriptor → signature → payload
-
-- ✅ Edge cases: size mismatches, corrupted data, overflow conditions
-
-- ✅ Error handling: invalid TOC entries, missing sections, boundary violations
-
-- ✅ All 7 bitstream type variants testedlid/invalid)
-
-- ✅ TOC entry validation (valid/invalid)
-
-- ✅ Config validation (valid/invalid)
-
-### test_vmprog_stream_reader (9 tests)
-
-Validates stream-based reading:
-
-- ✅ Stream read operations
-
-- ✅ Stream seek operations
-
-- ✅ Header reading
-
-- ✅ TOC entry reading
-
-- ✅ Payload reading
-
-- ✅ Buffer size validation
-
-- ✅ Stream boundary conditions
-
-- ✅ Invalid data handling
-
-- ✅ Large payload support
+**Stream Error Handling (5 tests)**
+- ✅ Seek past end of stream detection
+- ✅ Read from empty stream rejection
+- ✅ TOC entry pointing past file end rejection
+- ✅ Signed package missing signature TOC detection
+- ✅ find_toc_entry returns correct/null pointer
 
 ### test_vmprog_public_keys (8 tests)
-
 Validates public key definitions:
-
 - ✅ Public key array existence
-
 - ✅ Ed25519 key size (32 bytes)
-
 - ✅ Key data validation (non-zero)
-
 - ✅ Key accessibility
-
 - ✅ Key copying
-
 - ✅ Key entropy (uniqueness)
-
 - ✅ Array bounds
-
 - ✅ Constexpr support
 
 ### test_videomancer_fpga_controller (11 tests)
+Validates FPGA controller operations:
+- ✅ Controller initialization (shadow registers zero)
+- ✅ Rotary potentiometer set/get via SPI
+- ✅ Value masking to 10-bit range
+- ✅ Toggle switch individual and bulk operations
+- ✅ Video timing mode configuration
+- ✅ Bulk update (set_all_rotary_pots, 6 transactions)
+- ✅ Write optimization (no SPI write for unchanged values)
+- ✅ Shadow register reset
+- ✅ Toggle switch read back
+- ✅ SPI frame format (16-bit encoding: W/R, addr, data)
+- ✅ Chip select assertion during SPI transfers
 
-ValPython Test Coverage
+## Python Test Coverage
 
 ### test_converter.py
-
 Tests TOML-to-binary conversion tool:
-
 - ✅ Valid TOML conversion
-
 - ✅ Schema validation
-
 - ✅ Binary output format
-
 - ✅ Error handling for invalid input
 
 ### test_ed25519_signing.py
-
 Tests Ed25519 key generation and signing:
-
 - ✅ Key pair generation
-
 - ✅ Package signing workflow
-
 - ✅ Signature verification
+- ✅ Invalid signature rejection
 
-- ✅ Run All Tests
+## Shell Integration Test Coverage
 
-```bash
-
-cd tests
-
-./run_tests.sh
-
-```
-
-### Run Specific Test Categories
-
-```bash
-
-cd tests
-
-./run_tests.sh --cpp-only      # C++ tests only
-
-./run_tests.sh --python-only   # Python tests only
-
-./run_tests.sh --shell-only    # Shell tests only
-
-```
-
-### Quick C++ Test
-
-```bash
-
-./build_sdk.sh --test
-
-```
-
-### Individual C++st for TOML conversion workflow:
-
+### test_conversion.sh
+Integration test for TOML conversion workflow:
 - ✅ End-to-end conversion pipeline
-
 - ✅ File I/O operations
-
 - ✅ Error propagation
-
 - ✅ Output validation
 
 ### test_vmprog_pack.sh
-
 Integration test for package creation:
-
 - ✅ VMProg package building
-
 - ✅ Signature embedding
-
 - ✅ Multi-component packaging
-
 - ✅ Final package validation
 
 ## Abstract Interface Coverage
@@ -293,146 +255,92 @@ Integration test for package creation:
 The following headers define abstract interfaces and are tested indirectly through mock implementations:
 
 ### videomancer_fpga.hpp
-
 - Tested via `mock_videomancer_fpga` in test_videomancer_fpga_controller
-
 - Validates SPI transfer and chip select operations
 
 ### vmprog_stream.hpp
-
 - Tested via `mock_vmprog_stream` in test_vmprog_stream_reader
-
 - Validates read and seek operations
+- Used extensively in integration tests with mock packages
 
-- Used extensively i125 |
+## Test Statistics
 
+| Category | Count |
+|----------|-------|
+| C++ Unit Tests | 118 |
+| VHDL Unit Tests | 23 |
 | Python Tests | 2 |
-
 | Shell Tests | 2 |
-
-| **Total Tests** | **129** |
-
+| **Total Tests** | **145** |
 | Pass Rate | 100% |
-
 | Compilation Status | ✅ Clean |
-
-| Integration | ✅ CMake + CTest + Test Runner
-
-The following headers define abstract interfaces and are tested indirectly through mock implementations:
-
-### videomancer_fpga.hpp
-
-- Tested via `mock_videomancer_fpga` in test_videomancer_fpga_controller
-
-- Validates SPI transfer and chip select operations
-
-### vmprog_stream.hpp
-
-- Tested via `mock_vmprog_stream` in test_vmprog_stream_reader
-
-- Validates read and seek operations
+| Integration | ✅ CMake + CTest + VUnit + Test Runner |
 
 ## Test Execution
 
-### Quick Test
-
+### Run All Tests
 ```bash
-
-./build_sdk.sh --test
-
+cd tests
+./run_tests.sh
 ```
 
-### Individual Test Suites
-
+### Run Specific Test Categories
 ```bash
+cd tests
+./run_tests.sh --cpp-only      # C++ tests only
+./run_tests.sh --python-only   # Python tests only
+./run_tests.sh --shell-only    # Shell tests only
+./run_tests.sh --vhdl-only     # VHDL tests only
+```
 
+### Quick C++ Test
+```bash
+./build_sdk.sh --test
+```
+
+### Individual C++ Test Suites
+```bash
 cd build/tests/cpp
-
 ./test_vmprog_crypto
-
 ./test_videomancer_abi
-
 ./test_vmprog_format
-
 ./test_vmprog_stream_reader
-
 ./test_vmprog_public_keys
-
 ./test_videomancer_fpga_controller
-
 ```
 
 ### CTest Integration
+```bash
+cd build
+ctest --output-on-failure
+ctest -R crypto  # Run only crypto tests
+```
 
-```Test Suite Improvements (Version 0.3.0)
+## Test Suite Improvements (Version 0.3.0)
 
 Recent enhancements to the test suite:
-
 - ✅ Expanded from 60 to 118 C++ tests (97% increase)
-
 - ✅ Added comprehensive integration tests with mock package framework
-
 - ✅ Switched to RFC 8032-compliant Ed25519 (SHA-512) from EdDSA (Blake2b)
-
 - ✅ Added test documentation (README.md, COVERAGE.md)
-
 - ✅ Reorganized tests into language-specific directories
-
 - ✅ Created unified test runner script
-
 - ✅ Achieved 100% method-level coverage for all public APIs
 
 ## Future Test Enhancements
 
 Potential areas for expansion:
-
 - [ ] Performance benchmarks for cryptographic operations
-
 - [ ] Stress tests for large file processing
-
 - [ ] Thread safety validation (if applicable)
-
 - [ ] Memory leak detection with Valgrind
-
 - [ ] Code coverage analysis with gcov/lcov
-
 - [ ] Fuzzing tests for format parsing
-
 - [ ] Integration tests with actual FPGA hardware
 
 ## Notes
 
 - Ed25519 signature verification uses RFC 8032-compliant implementation via Monocypher's `crypto_ed25519_check`
-
 - Abstract interfaces (videomancer_fpga.hpp, vmprog_stream.hpp) cannot be directly instantiated and are tested through mock implementations
-
 - All tests are self-contained with no external dependencies beyond the SDK itself and the bundled Monocypher library
-
 - Mock package framework enables comprehensive integration testing without actual .vmprog files
-
-## Future Test Enhancements
-
-Potential areas for expansion:
-
-- [ ] Performance benchmarks for cryptographic operations
-
-- [ ] Stress tests for large file processing
-
-- [ ] Thread safety validation (if applicable)
-
-- [ ] Memory leak detection with Valgrind
-
-- [ ] Code coverage analysis with gcov/lcov
-
-- [ ] Fuzzing tests for format parsing
-
-- [ ] Integration tests with actual FPGA hardware (mock-based)
-
-## Notes
-
-- Ed25519 signature verification test in test_vmprog_crypto is optional and commented out by default. It can be enabled if monocypher is built with Ed25519 support.
-
-- Abstract interfaces (videomancer_fpga.hpp, vmprog_stream.hpp) cannot be directly instantiated and are therefore tested through mock implementations in dependent test suites.
-
-- All tests are self-contained with no external dependencies beyond the SDK itself and the bundled Monocypher library.
-

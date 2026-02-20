@@ -49,7 +49,7 @@ echo ""
 if [ "${OS_TYPE}" = "Linux" ]; then
     echo -e "${GREEN}Installing build dependencies...${NC}"
     sudo apt update
-    sudo apt install -y cmake git gcc-arm-none-eabi libnewlib-arm-none-eabi libstdc++-arm-none-eabi-newlib gcc g++ build-essential
+    sudo apt install -y cmake git gcc-arm-none-eabi libnewlib-arm-none-eabi libstdc++-arm-none-eabi-newlib gcc g++ build-essential python3-pil
 
     OSS_ARCH="linux-x64"
     DOWNLOAD_CMD="wget"
@@ -68,6 +68,7 @@ elif [ "${OS_TYPE}" = "macOS" ]; then
     brew install grep || {
         echo -e "${YELLOW}Warning: grep installation failed or already installed${NC}"
     }
+    brew install python
     brew install --cask gcc-arm-embedded || {
         echo -e "${YELLOW}Warning: gcc-arm-embedded installation failed or already installed${NC}"
     }
@@ -86,6 +87,23 @@ elif [ "${OS_TYPE}" = "macOS" ]; then
     fi
 
     DOWNLOAD_CMD="curl -L -O"
+fi
+
+echo -e "${GREEN}Installing Python PIL dependency (Pillow)...${NC}"
+if python3 -c "from PIL import Image" 2>/dev/null; then
+    echo -e "${GREEN}✓ Pillow already available${NC}"
+else
+    if python3 -m pip install --user pillow 2>/dev/null; then
+        echo -e "${GREEN}✓ Pillow installed via pip (--user)${NC}"
+    elif python3 -m pip install --break-system-packages pillow 2>/dev/null; then
+        echo -e "${GREEN}✓ Pillow installed via pip (--break-system-packages)${NC}"
+    else
+        echo -e "${RED}✗ Failed to install Pillow automatically${NC}"
+        echo -e "${YELLOW}  Install manually with one of:${NC}"
+        echo -e "${YELLOW}    sudo apt install python3-pil${NC}"
+        echo -e "${YELLOW}    python3 -m pip install --user pillow${NC}"
+        exit 1
+    fi
 fi
 
 echo -e "${GREEN}Downloading OSS CAD Suite...${NC}"
