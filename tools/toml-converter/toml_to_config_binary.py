@@ -361,7 +361,10 @@ def pack_parameter_config(param: Dict[str, Any]) -> bytes:
     value_labels = param.get('value_labels', [])
     has_value_labels = len(value_labels) > 0
 
-    if has_value_labels or 'control_mode' not in param:
+    if has_value_labels:
+        # 2 value_labels = boolean toggle; 3+ = stepped/enum (treated as linear for now)
+        control_mode = CONTROL_MODE_MAP['boolean'] if len(value_labels) == 2 else 0
+    elif 'control_mode' not in param:
         control_mode = 0  # linear
     else:
         control_mode = param.get('control_mode', 0)
