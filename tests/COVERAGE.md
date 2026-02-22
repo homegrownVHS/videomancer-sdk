@@ -3,11 +3,11 @@
 ## Summary
 
 **Test Suite Status**: ✅ All tests passing
-**Total C++ Unit Tests**: 118 tests across 6 test suites
+**Total C++ Unit Tests**: 107 tests across 5 test suites
 **VHDL Unit Tests**: 23 tests across 4 test suites
 **Python Tests**: 2 test modules
 **Shell Tests**: 2 integration tests
-**Header Coverage**: 8/9 headers (89%)
+**Header Coverage**: 7/8 headers (88%)
 **Last Updated**: 2025-12-15
 
 ## C++ Header Coverage
@@ -16,7 +16,6 @@
 |------------|------------|-------|--------|
 | `videomancer_abi.hpp` | test_videomancer_abi | 6 | ✅ Passed |
 | `videomancer_fpga.hpp` | (tested via mock) | - | ✅ Covered |
-| `videomancer_fpga_controller.hpp` | test_videomancer_fpga_controller | 11 | ✅ Passed |
 | `videomancer_sdk_version.hpp` | - | - | ⚠️ Not tested |
 | `vmprog_crypto.hpp` | test_vmprog_crypto | 15 | ✅ Passed |
 | `vmprog_format.hpp` | test_vmprog_format | 41 | ✅ Passed |
@@ -204,20 +203,6 @@ Validates public key definitions:
 - ✅ Array bounds
 - ✅ Constexpr support
 
-### test_videomancer_fpga_controller (11 tests)
-Validates FPGA controller operations:
-- ✅ Controller initialization (shadow registers zero)
-- ✅ Rotary potentiometer set/get via SPI
-- ✅ Value masking to 10-bit range
-- ✅ Toggle switch individual and bulk operations
-- ✅ Video timing mode configuration
-- ✅ Bulk update (set_all_rotary_pots, 6 transactions)
-- ✅ Write optimization (no SPI write for unchanged values)
-- ✅ Shadow register reset
-- ✅ Toggle switch read back
-- ✅ SPI frame format (16-bit encoding: W/R, addr, data)
-- ✅ Chip select assertion during SPI transfers
-
 ## Python Test Coverage
 
 ### test_converter.py
@@ -255,8 +240,8 @@ Integration test for package creation:
 The following headers define abstract interfaces and are tested indirectly through mock implementations:
 
 ### videomancer_fpga.hpp
-- Tested via `mock_videomancer_fpga` in test_videomancer_fpga_controller
-- Validates SPI transfer and chip select operations
+- Defines the abstract SPI interface for FPGA communication
+- Tested indirectly through firmware's `fpga_bridge` implementation
 
 ### vmprog_stream.hpp
 - Tested via `mock_vmprog_stream` in test_vmprog_stream_reader
@@ -267,11 +252,11 @@ The following headers define abstract interfaces and are tested indirectly throu
 
 | Category | Count |
 |----------|-------|
-| C++ Unit Tests | 118 |
+| C++ Unit Tests | 107 |
 | VHDL Unit Tests | 23 |
 | Python Tests | 2 |
 | Shell Tests | 2 |
-| **Total Tests** | **145** |
+| **Total Tests** | **134** |
 | Pass Rate | 100% |
 | Compilation Status | ✅ Clean |
 | Integration | ✅ CMake + CTest + VUnit + Test Runner |
@@ -306,7 +291,6 @@ cd build/tests/cpp
 ./test_vmprog_format
 ./test_vmprog_stream_reader
 ./test_vmprog_public_keys
-./test_videomancer_fpga_controller
 ```
 
 ### CTest Integration

@@ -14,7 +14,6 @@ set(TEST_SOURCES
     test_vmprog_format.cpp
     test_vmprog_stream_reader.cpp
     test_vmprog_public_keys.cpp
-    test_videomancer_fpga_controller.cpp
     test_vmprog_parameter_utils.cpp
 )
 

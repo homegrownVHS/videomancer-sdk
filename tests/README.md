@@ -4,13 +4,12 @@ Comprehensive test suite for the Videomancer SDK C++ headers and Python tools.
 
 ## Test Summary
 
-- **Total C++ Unit Tests**: 118 tests across 6 test suites
+- **Total C++ Unit Tests**: 107 tests across 5 test suites
   - test_vmprog_crypto: 15 tests
   - test_videomancer_abi: 6 tests
   - test_vmprog_format: 41 tests
   - test_vmprog_stream_reader: 37 tests
   - test_vmprog_public_keys: 8 tests
-  - test_videomancer_fpga_controller: 11 tests
 - **VHDL Unit Tests**: 23 tests across 4 test suites
   - tb_sync_slv: 5 tests
   - tb_yuv422_to_yuv444: 7 tests
@@ -32,7 +31,6 @@ tests/
 │   ├── test_vmprog_format.cpp
 │   ├── test_vmprog_stream_reader.cpp
 │   ├── test_vmprog_public_keys.cpp
-│   ├── test_videomancer_fpga_controller.cpp
 │   └── CMakeLists.txt
 ├── vhdl/                   # VHDL unit tests for FPGA RTL modules
 │   ├── run.py             # VUnit test runner
@@ -183,20 +181,6 @@ Tests public key definitions from `vmprog_public_keys.hpp`:
 - Array bounds and accessibility
 - Constexpr compilation support
 - Key copying and memory safety
-
-#### `test_videomancer_fpga_controller.cpp`
-Tests FPGA controller from `videomancer_fpga_controller.hpp`:
-- Controller initialization and shadow registers
-- Rotary potentiometer set/get operations (6 pots)
-- Linear potentiometer control
-- Toggle switch individual and bulk operations (5 switches)
-- Video timing mode configuration
-- Bulk update methods (set_all_rotary_pots, set_all_controls)
-- Write optimization (no-op for unchanged values)
-- Shadow register reset functionality
-- SPI frame encoding and format validation
-- Chip select assertion during transfers
-- Value masking to 10-bit range
 
 ### Python Tool Tests
 
