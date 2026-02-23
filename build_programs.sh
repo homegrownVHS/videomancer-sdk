@@ -122,6 +122,24 @@ case "$(uname -s)" in
         ;;
 esac
 
+# Function to check for timing violations in nextpnr build log
+# Returns 0 if no timing errors, 1 if timing errors found
+# Args: $1 = log file path
+# Note: only checks for ERROR-level timing failures (post-route verification),
+# not Info-level warnings (initial timing estimate which may be pessimistic).
+check_timing_errors() {
+    local log_file="$1"
+    if [ ! -f "$log_file" ]; then
+        return 0
+    fi
+    # nextpnr reports definitive post-route timing violations as:
+    #   "ERROR: Max frequency for clock ... (FAIL at ...)"
+    if $SEARCH -q 'ERROR.*FAIL at' "$log_file"; then
+        return 1
+    fi
+    return 0
+}
+
 # Function to extract timing and resource information from nextpnr build log
 # Args: $1 = log file path
 parse_build_stats() {
@@ -364,6 +382,9 @@ for PROGRAM in $PROGRAMS; do
         HW_BUILD_ROOT="${BUILD_ROOT}/${HARDWARE}/"
         mkdir -p "${HW_BUILD_ROOT}/bitstreams"
 
+        # Remove stale .vmprog so a failed build can't be masked by a previous success
+        rm -f "${VIDEOMANCER_OUT_DIR%/}/${HARDWARE}/${PROGRAM}.vmprog"
+
         # Synthesize FPGA bitstreams (6 variants)
         echo -e "${GREEN}Synthesizing FPGA bitstreams for ${HARDWARE}...${NC}"
         cd fpga
@@ -398,6 +419,14 @@ for PROGRAM in $PROGRAMS; do
             FAILED_PROGRAMS=$((FAILED_PROGRAMS + 1))
             continue 2
         fi
+        if ! check_timing_errors "$MAKE_LOG"; then
+            echo -e "${RED}Timing constraint violated. Error output:${NC}"
+            cat "$MAKE_LOG"
+            rm -f "$MAKE_LOG"
+            cd ..
+            FAILED_PROGRAMS=$((FAILED_PROGRAMS + 1))
+            continue 2
+        fi
         END=$(date +%s.%N)
         ELAPSED=$(echo "$END - $START" | bc)
         BUILD_STATS=$(parse_build_stats "$MAKE_LOG")
@@ -411,6 +440,14 @@ for PROGRAM in $PROGRAMS; do
         START=$(date +%s.%N)
         if ! make VIDEOMANCER_SDK_ROOT="${VIDEOMANCER_SDK_ROOT}" PROJECT_ROOT="${PROJECT_ROOT}" BUILD_ROOT="${HW_BUILD_ROOT}" PROGRAM=$PROGRAM CONFIG=sd_analog DEVICE=$DEVICE PACKAGE=$PACKAGE FREQUENCY=27 HARDWARE=$HARDWARE CORE=$CORE PLATFORM=$PLATFORM > "$MAKE_LOG" 2>&1; then
             echo -e "${RED}Build failed. Error output:${NC}"
+            cat "$MAKE_LOG"
+            rm -f "$MAKE_LOG"
+            cd ..
+            FAILED_PROGRAMS=$((FAILED_PROGRAMS + 1))
+            continue 2
+        fi
+        if ! check_timing_errors "$MAKE_LOG"; then
+            echo -e "${RED}Timing constraint violated. Error output:${NC}"
             cat "$MAKE_LOG"
             rm -f "$MAKE_LOG"
             cd ..
@@ -436,6 +473,14 @@ for PROGRAM in $PROGRAMS; do
             FAILED_PROGRAMS=$((FAILED_PROGRAMS + 1))
             continue 2
         fi
+        if ! check_timing_errors "$MAKE_LOG"; then
+            echo -e "${RED}Timing constraint violated. Error output:${NC}"
+            cat "$MAKE_LOG"
+            rm -f "$MAKE_LOG"
+            cd ..
+            FAILED_PROGRAMS=$((FAILED_PROGRAMS + 1))
+            continue 2
+        fi
         END=$(date +%s.%N)
         ELAPSED=$(echo "$END - $START" | bc)
         BUILD_STATS=$(parse_build_stats "$MAKE_LOG")
@@ -449,6 +494,14 @@ for PROGRAM in $PROGRAMS; do
         START=$(date +%s.%N)
         if ! make VIDEOMANCER_SDK_ROOT="${VIDEOMANCER_SDK_ROOT}" PROJECT_ROOT="${PROJECT_ROOT}" BUILD_ROOT="${HW_BUILD_ROOT}" PROGRAM=$PROGRAM CONFIG=sd_hdmi DEVICE=$DEVICE PACKAGE=$PACKAGE FREQUENCY=27 HARDWARE=$HARDWARE CORE=$CORE PLATFORM=$PLATFORM > "$MAKE_LOG" 2>&1; then
             echo -e "${RED}Build failed. Error output:${NC}"
+            cat "$MAKE_LOG"
+            rm -f "$MAKE_LOG"
+            cd ..
+            FAILED_PROGRAMS=$((FAILED_PROGRAMS + 1))
+            continue 2
+        fi
+        if ! check_timing_errors "$MAKE_LOG"; then
+            echo -e "${RED}Timing constraint violated. Error output:${NC}"
             cat "$MAKE_LOG"
             rm -f "$MAKE_LOG"
             cd ..
@@ -474,6 +527,14 @@ for PROGRAM in $PROGRAMS; do
             FAILED_PROGRAMS=$((FAILED_PROGRAMS + 1))
             continue 2
         fi
+        if ! check_timing_errors "$MAKE_LOG"; then
+            echo -e "${RED}Timing constraint violated. Error output:${NC}"
+            cat "$MAKE_LOG"
+            rm -f "$MAKE_LOG"
+            cd ..
+            FAILED_PROGRAMS=$((FAILED_PROGRAMS + 1))
+            continue 2
+        fi
         END=$(date +%s.%N)
         ELAPSED=$(echo "$END - $START" | bc)
         BUILD_STATS=$(parse_build_stats "$MAKE_LOG")
@@ -487,6 +548,14 @@ for PROGRAM in $PROGRAMS; do
         START=$(date +%s.%N)
         if ! make VIDEOMANCER_SDK_ROOT="${VIDEOMANCER_SDK_ROOT}" PROJECT_ROOT="${PROJECT_ROOT}" BUILD_ROOT="${HW_BUILD_ROOT}" PROGRAM=$PROGRAM CONFIG=sd_dual DEVICE=$DEVICE PACKAGE=$PACKAGE FREQUENCY=27 HARDWARE=$HARDWARE CORE=$CORE PLATFORM=$PLATFORM > "$MAKE_LOG" 2>&1; then
             echo -e "${RED}Build failed. Error output:${NC}"
+            cat "$MAKE_LOG"
+            rm -f "$MAKE_LOG"
+            cd ..
+            FAILED_PROGRAMS=$((FAILED_PROGRAMS + 1))
+            continue 2
+        fi
+        if ! check_timing_errors "$MAKE_LOG"; then
+            echo -e "${RED}Timing constraint violated. Error output:${NC}"
             cat "$MAKE_LOG"
             rm -f "$MAKE_LOG"
             cd ..

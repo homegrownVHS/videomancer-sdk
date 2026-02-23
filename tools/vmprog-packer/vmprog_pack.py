@@ -170,8 +170,12 @@ class BitstreamFile:
 # =============================================================================
 
 def calculate_sha256(data: bytes) -> bytes:
-    """Calculate SHA-256 hash of data"""
-    return hashlib.sha256(data).digest()
+    """Calculate BLAKE2b-256 hash of data.
+
+    Uses BLAKE2b with a 32-byte digest to match the firmware's Monocypher-based
+    hash implementation (crypto_blake2b with output size 32).
+    """
+    return hashlib.blake2b(data, digest_size=32).digest()
 
 
 def load_ed25519_keys(keys_dir: Path) -> Tuple[Optional['Ed25519PrivateKey'], Optional['Ed25519PublicKey']]:
