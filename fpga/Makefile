@@ -15,6 +15,7 @@ FREQUENCY = 74.25
 HARDWARE = rev_b
 CORE = yuv444_30b
 PLATFORM = ice40
+SEED ?= 1
 
 VHD_FILES = $(wildcard $(VIDEOMANCER_SDK_ROOT)/fpga/core/${CORE}/rtl/*.vhd) \
 	$(wildcard $(PROJECT_ROOT)/*.vhd) \
@@ -45,7 +46,7 @@ $(JSON_FILE): $(VHD_FILES)
 
 $(ASC_FILE): $(JSON_FILE)
 	@mkdir -p $(dir $@)
-	nextpnr-ice40 --$(DEVICE) --package $(PACKAGE) --pcf $(PCF_FILE) --freq $(FREQUENCY) --json $< --asc $@
+	nextpnr-ice40 --$(DEVICE) --package $(PACKAGE) --pcf $(PCF_FILE) --freq $(FREQUENCY) --json $< --asc $@ --seed $(SEED) --timing-allow-fail
 
 $(BIN_FILE): $(ASC_FILE)
 	icepack $< $@
