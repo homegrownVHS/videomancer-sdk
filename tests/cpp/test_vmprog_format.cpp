@@ -142,12 +142,18 @@ bool test_toc_entry_init() {
         return false;
     }
 
-    // Verify reserved fields are zeroed (4 uint32_t elements)
-    for (size_t i = 0; i < 4; ++i) {
+    // Verify reserved fields are zeroed (3 uint32_t elements)
+    for (size_t i = 0; i < 3; ++i) {
         if (entry.reserved[i] != 0) {
             std::cerr << "FAILED: TOC entry init test - reserved field not zeroed" << std::endl;
             return false;
         }
+    }
+
+    // Verify uncompressed_size is zeroed
+    if (entry.uncompressed_size != 0) {
+        std::cerr << "FAILED: TOC entry init test - uncompressed_size not zeroed" << std::endl;
+        return false;
     }
 
     std::cout << "PASSED: TOC entry initialization test" << std::endl;

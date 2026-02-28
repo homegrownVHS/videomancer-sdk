@@ -2,7 +2,7 @@
 
 Binary container for FPGA programs with Ed25519 signing.
 
-**Properties:** Version 1.0 | 1 MB max | Little-endian | `.vmprog` extension
+**Properties:** Version 1.0/1.1 | 1 MB max | Little-endian | `.vmprog` extension
 
 ## File Structure
 
@@ -15,6 +15,33 @@ Payloads - Config (7372 bytes), descriptor (332 bytes), signature (64 bytes), bi
 ## TOC Entry Types
 
 `config` (1), `signed_descriptor` (2), `signature` (3), `fpga_bitstream` (4), `bitstream_sd_analog/hdmi/dual` (5-7), `bitstream_hd_analog/hdmi/dual` (8-10)
+
+## Bitstream Compression (v1.1)
+
+Starting with format version 1.1, bitstream payloads may be compressed using
+raw DEFLATE (RFC 1951) with a 1 KB sliding window (wbits=10). See
+[Bitstream Compression](bitstream-compression.md) for full details.
+
+### Identifying Compressed Sections
+
+- **Header flag**: `has_compressed_sections` (0x00000002) indicates at least
+  one TOC entry contains compressed data.
+- **TOC entry flag**: `compressed_deflate` (0x00000001) on individual entries.
+- **Uncompressed size**: `uncompressed_size` field in the TOC entry stores the
+  original payload size. This field is 0 for uncompressed entries.
+
+### Hash Verification
+
+All hashes (TOC entry BLAKE2b-256, signed descriptor artifact hashes) are
+computed over the **compressed** payload bytes as stored in the file.
+Decompression is NOT required for integrity or signature verification.
+
+### Backward Compatibility
+
+- Version 1.0 readers will reject v1.1 packages (minor version check).
+- Version 1.1 readers accept both v1.0 (uncompressed) and v1.1 packages.
+- The `compressed_deflate` flag only applies to bitstream TOC entries.
+  Config, signed descriptor, and signature sections must never be compressed.
 
 ## Reference
 
@@ -124,11 +151,11 @@ All structures use `#pragma pack(push, 1)` for byte-aligned packing.
 |-------:|------|-------|-----:|-------------|
 | 0 | uint32_t | magic | 4 | Magic: 0x47504D56 ('VMPG') |
 | 4 | uint16_t | version_major | 2 | Major version (1) |
-| 6 | uint16_t | version_minor | 2 | Minor version (0) |
+| 6 | uint16_t | version_minor | 2 | Minor version (0 = uncompressed, 1 = may contain compressed sections) |
 | 8 | uint16_t | header_size | 2 | Header size (64) |
 | 10 | uint16_t | reserved_pad | 2 | Reserved (zero) |
 | 12 | uint32_t | file_size | 4 | Total file size in bytes |
-| 16 | uint32_t | flags | 4 | Header flags |
+| 16 | uint32_t | flags | 4 | Header flags (see §4.1.1) |
 | 20 | uint32_t | toc_offset | 4 | TOC offset from file start |
 | 24 | uint32_t | toc_bytes | 4 | TOC size in bytes |
 | 28 | uint32_t | toc_count | 4 | Number of TOC entries |
@@ -140,7 +167,17 @@ All structures use `#pragma pack(push, 1)` for byte-aligned packing.
 - `max_file_size` = 1048576u (1 MB)
 - `default_version_major` = 1
 - `default_version_minor` = 0
+- `compression_version_minor` = 1
 - `struct_size` = 64
+
+#### 4.1.1 Header Flags
+
+**Enum:** `vmprog_header_flags_v1_0` (uint32_t)
+
+| Value | Name | Description |
+|------:|------|-------------|
+| 0x00000001 | `signed_pkg` | Package contains a valid Ed25519 signature |
+| 0x00000002 | `has_compressed_sections` | At least one TOC entry has compressed payload |
 
 ### 4.2 TOC Entry
 
@@ -149,15 +186,25 @@ All structures use `#pragma pack(push, 1)` for byte-aligned packing.
 | Offset | Type | Field | Size | Description |
 |-------:|------|-------|-----:|-------------|
 | 0 | uint32_t | type | 4 | Entry type enum |
-| 4 | uint32_t | flags | 4 | Entry flags |
+| 4 | uint32_t | flags | 4 | Entry flags (see §4.2.1) |
 | 8 | uint32_t | offset | 4 | Payload offset (absolute) |
-| 12 | uint32_t | size | 4 | Payload size in bytes |
-| 16 | uint8_t[32] | sha256 | 32 | SHA-256 hash of payload |
-| 48 | uint32_t[4] | reserved | 16 | Reserved (zeros) |
+| 12 | uint32_t | size | 4 | Payload size in bytes (compressed size if compressed) |
+| 16 | uint8_t[32] | sha256 | 32 | BLAKE2b-256 hash of payload as stored |
+| 48 | uint32_t | uncompressed_size | 4 | Original size before compression (0 if not compressed) |
+| 52 | uint32_t[3] | reserved | 12 | Reserved (zeros) |
 
 **Constants:**
 
 - `struct_size` = 64
+
+#### 4.2.1 TOC Entry Flags
+
+**Enum:** `vmprog_toc_entry_flags_v1_0` (uint32_t)
+
+| Value | Name | Description |
+|------:|------|-------------|
+| 0x00000000 | `none` | No flags set (uncompressed payload) |
+| 0x00000001 | `compressed_deflate` | Payload is raw DEFLATE compressed (RFC 1951, wbits=10) |
 
 ### 4.3 Artifact Hash
 

@@ -68,6 +68,7 @@ target_include_directories(videomancer-sdk INTERFACE
 
 target_link_libraries(videomancer-sdk INTERFACE
     monocypher
+    uzlib
 )
 
 # Optional: Enable testing

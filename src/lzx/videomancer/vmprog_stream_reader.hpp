@@ -21,6 +21,7 @@
 
 #include "vmprog_stream.hpp"
 #include "vmprog_format.hpp"
+#include "vmprog_decompress.hpp"
 
 namespace lzx {
 
@@ -406,6 +407,109 @@ inline vmprog_validation_result find_and_read_payload(
     return vmprog_validation_result::ok;
 }
 
+// =============================================================================
+// Streaming Bitstream Reader with Transparent Decompression
+// =============================================================================
+
+/**
+ * @brief Read a bitstream payload with streaming output and transparent decompression.
+ *
+ * For compressed bitstreams (compressed_deflate flag set), reads compressed chunks
+ * from the stream, decompresses them via vmprog_inflate_stream, and delivers
+ * decompressed chunks to the output callback.
+ *
+ * For uncompressed bitstreams, reads directly into the output callback buffer.
+ *
+ * @tparam ChunkCallback Callable: bool(const uint8_t* data, uint32_t size).
+ *         Return false to abort streaming.
+ * @param stream Input stream positioned anywhere (will seek to entry.offset)
+ * @param entry TOC entry for the bitstream
+ * @param chunk_callback Called with each chunk of decompressed data
+ * @param scratch_buf Scratch buffer for reading compressed data from stream
+ * @param scratch_buf_size Size of scratch buffer (256+ bytes recommended)
+ * @param decomp_buf Output buffer for decompressed chunks (4096 bytes recommended)
+ * @param decomp_buf_size Size of decompression output buffer
+ * @return Validation result code
+ */
+template <typename ChunkCallback>
+inline vmprog_validation_result read_bitstream_streaming(
+    vmprog_stream& stream,
+    const vmprog_toc_entry_v1_0& entry,
+    ChunkCallback&& chunk_callback,
+    uint8_t* scratch_buf,
+    uint32_t scratch_buf_size,
+    uint8_t* decomp_buf,
+    uint32_t decomp_buf_size
+) {
+    // Seek to payload
+    if (!stream.seek(entry.offset)) {
+        return vmprog_validation_result::invalid_payload_offset;
+    }
+
+    if (!is_toc_entry_compressed(entry)) {
+        // Uncompressed path — stream directly
+        uint32_t remaining = entry.size;
+        while (remaining > 0) {
+            uint32_t to_read = remaining < decomp_buf_size ? remaining : decomp_buf_size;
+            size_t bytes_read = stream.read(decomp_buf, to_read);
+            if (bytes_read == 0) {
+                return vmprog_validation_result::invalid_payload_offset;
+            }
+            if (!chunk_callback(decomp_buf, static_cast<uint32_t>(bytes_read))) {
+                return vmprog_validation_result::invalid_payload_offset;
+            }
+            remaining -= static_cast<uint32_t>(bytes_read);
+        }
+        return vmprog_validation_result::ok;
+    }
+
+    // Compressed path — read + decompress
+    uint8_t window[1024]; // wbits=10 sliding window
+    vmprog_inflate_stream inflater;
+    inflater.init(window, sizeof(window));
+
+    uint32_t compressed_remaining = entry.size;
+
+    while (compressed_remaining > 0 || !inflater.finished()) {
+        // Feed more compressed data if the inflater needs it
+        if (compressed_remaining > 0 && inflater.input_remaining() == 0) {
+            uint32_t to_read = compressed_remaining < scratch_buf_size
+                             ? compressed_remaining : scratch_buf_size;
+            size_t bytes_read = stream.read(scratch_buf, to_read);
+            if (bytes_read == 0) {
+                return vmprog_validation_result::invalid_payload_offset;
+            }
+            inflater.set_input(scratch_buf, static_cast<uint32_t>(bytes_read));
+            compressed_remaining -= static_cast<uint32_t>(bytes_read);
+        }
+
+        // Decompress into output buffer
+        auto result = inflater.decompress(decomp_buf, decomp_buf_size);
+
+        // Deliver decompressed data
+        if (result.bytes_produced > 0) {
+            if (!chunk_callback(decomp_buf, result.bytes_produced)) {
+                return vmprog_validation_result::invalid_payload_offset;
+            }
+        }
+
+        if (result.status == vmprog_inflate_result::invalid_data) {
+            return vmprog_validation_result::invalid_payload_offset;
+        }
+
+        if (result.status == vmprog_inflate_result::stream_end) {
+            break;
+        }
+    }
+
+    // Verify decompressed size matches expected
+    if (inflater.total_out() != entry.uncompressed_size) {
+        return vmprog_validation_result::invalid_payload_offset;
+    }
+
+    return vmprog_validation_result::ok;
+}
+
 /**
  * @brief Verify all payload hashes in TOC using stream.
  *
@@ -763,6 +867,47 @@ public:
         uint32_t* out_bytes_read = nullptr
     ) {
         return read_payload_by_type(vmprog_toc_entry_type_v1_0::fpga_bitstream, out_bitstream, max_bitstream_size, out_bytes_read);
+    }
+
+    /**
+     * @brief Stream a bitstream with transparent decompression.
+     *
+     * Finds the specified TOC entry type and streams it through
+     * read_bitstream_streaming(), transparently decompressing if the
+     * compressed_deflate flag is set.
+     *
+     * @tparam ChunkCallback Callable: bool(const uint8_t* data, uint32_t size).
+     *         Return false to abort streaming.
+     * @param type TOC entry type to stream
+     * @param chunk_callback Called with each chunk of (decompressed) data
+     * @param scratch Scratch buffer for reading compressed data (256+ bytes)
+     * @param scratch_size Size of scratch buffer
+     * @param decomp_buf Output buffer for decompressed chunks (4096 bytes recommended)
+     * @param decomp_buf_size Size of decompression output buffer
+     * @return Validation result code
+     */
+    template <typename ChunkCallback>
+    vmprog_validation_result stream_bitstream(
+        vmprog_toc_entry_type_v1_0 type,
+        ChunkCallback&& chunk_callback,
+        uint8_t* scratch,
+        uint32_t scratch_size,
+        uint8_t* decomp_buf,
+        uint32_t decomp_buf_size
+    ) {
+        if (!is_open_) return vmprog_validation_result::invalid_file_size;
+
+        const vmprog_toc_entry_v1_0* entry = find_toc_entry(toc_, header_.toc_count, type);
+        if (!entry) {
+            return vmprog_validation_result::invalid_toc_entry;
+        }
+
+        return read_bitstream_streaming(
+            *stream_, *entry,
+            static_cast<ChunkCallback&&>(chunk_callback),
+            scratch, scratch_size,
+            decomp_buf, decomp_buf_size
+        );
     }
 
     /**

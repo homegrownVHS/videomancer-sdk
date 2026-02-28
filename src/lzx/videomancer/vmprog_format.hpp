@@ -113,12 +113,14 @@ namespace lzx {
     {
         none = 0x00000000,
         signed_pkg = 0x00000001,
+        has_compressed_sections = 0x00000002,  ///< At least one TOC entry uses compression
     };
 
     // TOC entry flags
     enum class vmprog_toc_entry_flags_v1_0 : uint32_t
     {
-        none = 0x00000000
+        none = 0x00000000,
+        compressed_deflate = 0x00000001,  ///< Payload is raw DEFLATE compressed (RFC 1951, wbits=10)
     };
 
     // Signed descriptor flags
@@ -290,6 +292,7 @@ namespace lzx {
         static constexpr uint32_t max_file_size = 1048576u;       // 1 MB maximum file size
         static constexpr uint16_t default_version_major = 1;
         static constexpr uint16_t default_version_minor = 0;
+        static constexpr uint16_t compression_version_minor = 1;  ///< Minor version when compression is used
         static constexpr uint16_t struct_size = 64;
 
         uint32_t magic;                 // 'VMPG'
@@ -315,8 +318,9 @@ namespace lzx {
         vmprog_toc_entry_flags_v1_0 flags;    // Entry flags
         uint32_t offset;                    // Byte offset to payload from file start
         uint32_t size;                      // Size of payload in bytes
-        uint8_t  sha256[32];                // SHA-256 hash of payload
-        uint32_t reserved[4];               // Reserved for future use (16 bytes)
+        uint8_t  sha256[32];                // SHA-256 hash of payload (computed on stored/compressed data)
+        uint32_t uncompressed_size;         // Original payload size before compression (0 if not compressed)
+        uint32_t reserved[3];               // Reserved for future use (12 bytes)
     };
 #pragma pack(pop)
 
@@ -790,14 +794,61 @@ namespace lzx {
             return vmprog_validation_result::invalid_payload_offset;
         }
 
-        // Verify reserved fields are zeroed
-        for (uint32_t i = 0; i < 4; ++i) {
+        // Validate uncompressed_size field
+        const bool is_compressed =
+            (static_cast<uint32_t>(entry.flags) &
+             static_cast<uint32_t>(vmprog_toc_entry_flags_v1_0::compressed_deflate)) != 0;
+
+        if (is_compressed) {
+            // Compressed entries must have a non-zero uncompressed size
+            // and it must be larger than the compressed (stored) size
+            if (entry.uncompressed_size == 0 || entry.uncompressed_size < entry.size) {
+                return vmprog_validation_result::reserved_field_not_zero;
+            }
+        } else {
+            // Non-compressed entries must have uncompressed_size == 0
+            if (entry.uncompressed_size != 0) {
+                return vmprog_validation_result::reserved_field_not_zero;
+            }
+        }
+
+        // Verify remaining reserved fields are zeroed
+        for (uint32_t i = 0; i < 3; ++i) {
             if (entry.reserved[i] != 0) {
                 return vmprog_validation_result::reserved_field_not_zero;
             }
         }
 
         return vmprog_validation_result::ok;
+    }
+
+    // =========================================================================
+    // Compression Helpers
+    // =========================================================================
+
+    /// @brief Check if a TOC entry's payload is compressed.
+    ///
+    /// @param entry TOC entry to check
+    /// @return true if the entry uses DEFLATE compression
+    inline bool is_toc_entry_compressed(const vmprog_toc_entry_v1_0& entry) noexcept
+    {
+        return (static_cast<uint32_t>(entry.flags) &
+                static_cast<uint32_t>(vmprog_toc_entry_flags_v1_0::compressed_deflate)) != 0;
+    }
+
+    /// @brief Get the uncompressed payload size for a TOC entry.
+    ///
+    /// For compressed entries, returns the original uncompressed size.
+    /// For uncompressed entries, returns the stored size.
+    ///
+    /// @param entry TOC entry to query
+    /// @return Uncompressed payload size in bytes
+    inline uint32_t get_toc_entry_uncompressed_size(const vmprog_toc_entry_v1_0& entry) noexcept
+    {
+        if (is_toc_entry_compressed(entry)) {
+            return entry.uncompressed_size;
+        }
+        return entry.size;
     }
 
     /**
@@ -1402,9 +1453,10 @@ namespace lzx {
         for (size_t i = 0; i < sizeof(entry.sha256); ++i) {
             entry.sha256[i] = 0;
         }
-        for (size_t i = 0; i < 4; ++i) {
+        for (size_t i = 0; i < 3; ++i) {
             entry.reserved[i] = 0;
         }
+        entry.uncompressed_size = 0;
     }
 
     /**

@@ -29,6 +29,7 @@ Input directory structure:
 import struct
 import sys
 import hashlib
+import zlib
 from pathlib import Path
 from typing import Dict, List, Tuple, Optional, TYPE_CHECKING
 from dataclasses import dataclass
@@ -92,6 +93,12 @@ class TOCEntryType:
 class HeaderFlags:
     NONE = 0x00000000
     SIGNED_PKG = 0x00000001
+    HAS_COMPRESSED_SECTIONS = 0x00000002
+
+# TOC entry flags
+class TOCEntryFlags:
+    NONE = 0x00000000
+    COMPRESSED_DEFLATE = 0x00000001
 
 # Hardware compatibility flags
 HARDWARE_FLAGS_MAP = {
@@ -156,6 +163,7 @@ class TOCEntry:
     offset: int
     size: int
     sha256: bytes
+    uncompressed_size: int = 0  # Original size before compression (0 if uncompressed)
 
 @dataclass
 class BitstreamFile:
@@ -329,7 +337,7 @@ def find_bitstreams(input_dir: Path) -> List[BitstreamFile]:
 # Package Building
 # =============================================================================
 
-def build_vmprog_package(input_dir: Path, output_path: Path, sign: bool = True, keys_dir: Optional[Path] = None, hardware: Optional[str] = None, toml_path: Optional[Path] = None) -> bool:
+def build_vmprog_package(input_dir: Path, output_path: Path, sign: bool = True, keys_dir: Optional[Path] = None, hardware: Optional[str] = None, toml_path: Optional[Path] = None, compress: bool = True, compress_level: int = 9) -> bool:
     """
     Build a complete .vmprog package from input directory.
 
@@ -340,6 +348,8 @@ def build_vmprog_package(input_dir: Path, output_path: Path, sign: bool = True, 
         keys_dir: Directory containing Ed25519 keys (default: ./keys relative to script)
         hardware: Hardware name to build for (e.g., 'rev_a')
         toml_path: Path to program TOML file for validation
+        compress: If True, compress bitstream payloads with DEFLATE (default: True)
+        compress_level: Compression level 1-9 (default: 9, best compression)
 
     Returns:
         True if successful, False otherwise
@@ -460,6 +470,30 @@ def build_vmprog_package(input_dir: Path, output_path: Path, sign: bool = True, 
     print(f"  Size: {toc_entries[0].size}")
     print(f"  Hash: {config_hash.hex()[:16]}...")
 
+    # Pre-compress bitstreams (before building signed descriptor, since
+    # descriptor artifact hashes must match the stored/compressed data)
+    any_compressed = False
+    compressed_bitstreams = []  # list of (stored_data, entry_flags, uncompressed_size)
+    for bitstream in bitstreams:
+        stored_data = bitstream.data
+        entry_flags = TOCEntryFlags.NONE
+        uncompressed_size = 0
+
+        if compress:
+            compressor = zlib.compressobj(level=compress_level, wbits=-10)
+            compressed = compressor.compress(bitstream.data) + compressor.flush()
+
+            # Only use compressed version if it's actually smaller
+            if len(compressed) < len(bitstream.data):
+                uncompressed_size = len(bitstream.data)
+                stored_data = compressed
+                entry_flags = TOCEntryFlags.COMPRESSED_DEFLATE
+                any_compressed = True
+                ratio = len(compressed) / len(bitstream.data) * 100
+                print(f"  Compressed {bitstream.path.name}: {len(bitstream.data)} -> {len(compressed)} bytes ({ratio:.1f}%)")
+
+        compressed_bitstreams.append((stored_data, entry_flags, uncompressed_size))
+
     # Build signed descriptor
     print(f"\nBuilding signed descriptor...")
     signed_descriptor = bytearray(SIGNED_DESCRIPTOR_SIZE)
@@ -476,7 +510,8 @@ def build_vmprog_package(input_dir: Path, output_path: Path, sign: bool = True, 
     # artifacts (288 bytes = 8 × 36 bytes, at offset 36)
     artifact_offset = 36
     for i, bitstream in enumerate(bitstreams[:MAX_ARTIFACTS]):
-        bitstream_hash = calculate_sha256(bitstream.data)
+        stored_data = compressed_bitstreams[i][0]
+        bitstream_hash = calculate_sha256(stored_data)
         # artifact type (4 bytes)
         struct.pack_into('<I', signed_descriptor, artifact_offset, bitstream.entry_type)
         # artifact sha256 (32 bytes)
@@ -540,15 +575,18 @@ def build_vmprog_package(input_dir: Path, output_path: Path, sign: bool = True, 
     # Add bitstream entries
     bitstream_start_idx = 2 if will_sign else 1
     for i, bitstream in enumerate(bitstreams):
-        bitstream_hash = calculate_sha256(bitstream.data)
+        stored_data, entry_flags, uncompressed_size = compressed_bitstreams[i]
+
+        stored_hash = calculate_sha256(stored_data)
         toc_entries.append(TOCEntry(
             entry_type=bitstream.entry_type,
-            flags=0,
+            flags=entry_flags,
             offset=current_offset,
-            size=len(bitstream.data),
-            sha256=bitstream_hash
+            size=len(stored_data),
+            sha256=stored_hash,
+            uncompressed_size=uncompressed_size,
         ))
-        payloads.append(bitstream.data)
+        payloads.append(stored_data)
 
         entry_type_name = [k for k, v in vars(TOCEntryType).items()
                           if not k.startswith('_') and v == bitstream.entry_type][0]
@@ -556,10 +594,12 @@ def build_vmprog_package(input_dir: Path, output_path: Path, sign: bool = True, 
         print(f"\nTOC Entry {toc_entry_idx}: {entry_type_name}")
         print(f"  File: {bitstream.path.name}")
         print(f"  Offset: {current_offset}")
-        print(f"  Size: {len(bitstream.data)}")
-        print(f"  Hash: {bitstream_hash.hex()[:16]}...")
+        print(f"  Size: {len(stored_data)}")
+        if uncompressed_size > 0:
+            print(f"  Uncompressed size: {uncompressed_size}")
+        print(f"  Hash: {stored_hash.hex()[:16]}...")
 
-        current_offset += len(bitstream.data)
+        current_offset += len(stored_data)
 
     file_size = current_offset
 
@@ -573,15 +613,22 @@ def build_vmprog_package(input_dir: Path, output_path: Path, sign: bool = True, 
     # Build header
     header = bytearray(HEADER_SIZE)
 
+    # Determine version minor: bump to 1 if any sections are compressed
+    version_minor = 1 if any_compressed else VERSION_MINOR
+
     # Pack header fields
     struct.pack_into('<I', header, 0, VMPROG_MAGIC)           # magic
     struct.pack_into('<H', header, 4, VERSION_MAJOR)          # version_major
-    struct.pack_into('<H', header, 6, VERSION_MINOR)          # version_minor
+    struct.pack_into('<H', header, 6, version_minor)          # version_minor
     struct.pack_into('<H', header, 8, HEADER_SIZE)            # header_size
     struct.pack_into('<H', header, 10, 0)                     # reserved_pad
     struct.pack_into('<I', header, 12, file_size)             # file_size
-    # Set signed_pkg flag if package is signed
-    flags = HeaderFlags.SIGNED_PKG if will_sign else HeaderFlags.NONE
+    # Set header flags
+    flags = HeaderFlags.NONE
+    if will_sign:
+        flags |= HeaderFlags.SIGNED_PKG
+    if any_compressed:
+        flags |= HeaderFlags.HAS_COMPRESSED_SECTIONS
     struct.pack_into('<I', header, 16, flags)                 # flags
     struct.pack_into('<I', header, 20, toc_offset)            # toc_offset
     struct.pack_into('<I', header, 24, toc_bytes)             # toc_bytes
@@ -597,7 +644,8 @@ def build_vmprog_package(input_dir: Path, output_path: Path, sign: bool = True, 
         struct.pack_into('<I', toc_entry, 8, entry.offset)
         struct.pack_into('<I', toc_entry, 12, entry.size)
         toc_entry[16:48] = entry.sha256
-        # reserved[4] at offset 48-63 already zero-filled
+        # uncompressed_size at offset 48, reserved[3] at offset 52-63
+        struct.pack_into('<I', toc_entry, 48, entry.uncompressed_size)
         toc += toc_entry
 
     # Assemble complete package
@@ -687,8 +735,8 @@ def validate_vmprog_package(filepath: Path, verify_hashes: bool = True) -> bool:
 
     version_major = struct.unpack_from('<H', data, 4)[0]
     version_minor = struct.unpack_from('<H', data, 6)[0]
-    if version_major != VERSION_MAJOR or version_minor != VERSION_MINOR:
-        print(f"ERROR: Unsupported version {version_major}.{version_minor} (expected {VERSION_MAJOR}.{VERSION_MINOR})")
+    if version_major != VERSION_MAJOR or version_minor > 1:
+        print(f"ERROR: Unsupported version {version_major}.{version_minor} (expected 1.0 or 1.1)")
         return False
     print(f"✓ Version: {version_major}.{version_minor}")
 
@@ -759,11 +807,17 @@ def validate_vmprog_package(filepath: Path, verify_hashes: bool = True) -> bool:
                 entry_type_name = name
                 break
 
+        is_compressed = (entry_flags & TOCEntryFlags.COMPRESSED_DEFLATE) != 0
+        uncompressed_size = struct.unpack_from('<I', data, entry_offset + 48)[0]
+
         print(f"\nEntry {i}: {entry_type_name}")
         print(f"  Type: {entry_type}")
-        print(f"  Flags: 0x{entry_flags:08X}")
+        print(f"  Flags: 0x{entry_flags:08X}{' (compressed)' if is_compressed else ''}")
         print(f"  Offset: {payload_offset}")
         print(f"  Size: {payload_size}")
+        if is_compressed:
+            print(f"  Uncompressed size: {uncompressed_size}")
+            print(f"  Compression ratio: {payload_size / uncompressed_size * 100:.1f}%")
         print(f"  Hash: {payload_hash.hex()[:32]}...")
 
         # Validate payload bounds
@@ -928,6 +982,12 @@ Example:
                        help='Hardware name to build for (e.g., rev_a). Will validate against hardware_compatibility field.')
     parser.add_argument('--toml-path', type=Path, default=None,
                        help='Path to program TOML file for hardware validation')
+    parser.add_argument('--compress', action='store_true', default=True,
+                       help='Compress bitstream payloads with DEFLATE (default: enabled)')
+    parser.add_argument('--no-compress', action='store_true',
+                       help='Disable bitstream compression')
+    parser.add_argument('--compress-level', type=int, default=9, choices=range(1, 10),
+                       metavar='N', help='Compression level 1-9 (default: 9, best compression)')
 
     args = parser.parse_args()
 
@@ -935,6 +995,7 @@ Example:
     output_path = args.output_file
     sign = not args.no_sign
     keys_dir = args.keys_dir
+    do_compress = args.compress and not args.no_compress
 
     if not input_dir.exists():
         print(f"ERROR: Input directory does not exist: {input_dir}")
@@ -946,7 +1007,8 @@ Example:
 
     # Build package
     success = build_vmprog_package(input_dir, output_path, sign=sign, keys_dir=keys_dir,
-                                   hardware=args.hardware, toml_path=args.toml_path)
+                                   hardware=args.hardware, toml_path=args.toml_path,
+                                   compress=do_compress, compress_level=args.compress_level)
     if not success:
         print("\nERROR: Package creation failed")
         sys.exit(1)

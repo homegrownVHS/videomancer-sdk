@@ -218,6 +218,11 @@ if __name__ == "__main__":
 
 Creates bitstreams, config binary, and `.vmprog` package. Test on hardware.
 
+Bitstream payloads are DEFLATE-compressed by default, reducing `.vmprog`
+file size by approximately 60%. The firmware decompresses transparently
+during FPGA configuration. Use `--no-compress` to disable compression
+if needed. See [Bitstream Compression](bitstream-compression.md).
+
 ## Examples
 
 - `programs/passthru` - Minimal reference (1 clock latency)
@@ -227,6 +232,7 @@ Creates bitstreams, config binary, and `.vmprog` package. Test on hardware.
 
 - [TOML Configuration Guide](toml-config-guide.md)
 - [VMPROG Format](vmprog-format.md)
+- [Bitstream Compression](bitstream-compression.md)
 - [ABI Format](abi-format.md)
 - [Package Signing](package-signing-guide.md)
 
