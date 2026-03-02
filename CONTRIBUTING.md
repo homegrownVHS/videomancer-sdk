@@ -82,6 +82,22 @@ For developers creating new VHDL programs, see the **[Program Development Guide]
 - CMake 3.13+
 - C++17 compiler (C++20 on non-Windows)
 - Git
+- **GHDL ≥ 3.0** (via [OSS CAD Suite](https://github.com/YosysHQ/oss-cad-suite-build)) — required for FPGA synthesis and VHDL image simulation
+- **Python 3.10+** — required for SDK tools and the VHDL Image Tester
+
+### Testing Programs Without Hardware
+
+The **VHDL Image Tester** (`tools/vhdl-image-tester/`) runs any Videomancer program as an authentic GHDL simulation against a still image. No FPGA hardware is needed.
+
+```bash
+# GUI
+cd tools/vhdl-image-tester && ./run.sh --install && ./run.sh
+
+# CLI (headless)
+lzx-vhdl-cli simulate your_program --image path/to/image.png --output result.png
+```
+
+See [tools/vhdl-image-tester/README.md](tools/vhdl-image-tester/README.md) for full setup and usage.
 
 ### Building from Source
 

@@ -225,41 +225,84 @@ if needed. See [Bitstream Compression](bitstream-compression.md).
 
 ### Step 7: Verify With the VHDL Image Tester
 
-The **VHDL Image Tester** (`videomancer-sdk/tools/vhdl-image-tester/`) lets you run any
+The **VHDL Image Tester** (`tools/vhdl-image-tester/`) lets you run any
 Videomancer program as an **authentic GHDL simulation** on a still image and
-inspect the processed result side-by-side with the original — no FPGA hardware
-required.
+inspect the processed result — no FPGA hardware required.
+
+The tester analyses every SDK package and your program's VHDL source files,
+elaborates a testbench, and drives the DUT clock-by-clock using a BT.601-
+converted pixel stream. Any discrepancy between expected and actual output
+indicates a genuine VHDL bug rather than a simulator abstraction artifact.
+
+#### GUI mode (interactive)
 
 ```bash
-# First-time setup (creates a virtual environment and installs PyQt6/NumPy/Pillow):
-cd videomancer-sdk/tools/vhdl-image-tester
+# First-time setup (creates a .venv and installs PyQt6/NumPy/Pillow):
+cd tools/vhdl-image-tester
 ./run.sh --install
 
 # Launch:
 ./run.sh
 ```
 
-Or launch directly without installing:
+Or launch without installing:
 
 ```bash
-python videomancer-sdk/tools/vhdl-image-tester/run.py
+python tools/vhdl-image-tester/run.py
 ```
 
 **Workflow:**
 1. Select your program from the dropdown.
 2. Select a source image (test images are in `docs/test_images/`).
 3. Adjust register sliders to the values you want to test.
-4. Press **F5** to simulate. Before/after images appear immediately.
+4. Press **F5** to simulate. Before/after images appear side-by-side.
 
-The tester uses the same GHDL toolchain as the FPGA build — it analyses every
-SDK package and your program's VHDL source files, elaborates the testbench, and
-drives the DUT clock-by-clock using a BT.601-converted pixel stream derived from
-the source image. This means any simulation discrepancy indicates a genuine VHDL
-bug rather than a simulator abstraction artifact.
+Use **Export Regs** (or `lzx-vhdl-cli export-regs`) to save parameter
+presets as JSON for reproducible test cases.
 
-Use **Export Regs** to save parameter presets as JSON for reproducible test
-cases. See the full [VHDL Image Tester README](../tools/vhdl-image-tester/README.md)
-for installation details, keyboard shortcuts, and troubleshooting.
+#### CLI mode (headless / scriptable)
+
+All GUI features are available without a display server:
+
+```bash
+# List programs visible to the tester
+lzx-vhdl-cli list
+
+# Show your program's parameter table
+lzx-vhdl-cli info your_program
+
+# Run a simulation and save the result
+lzx-vhdl-cli simulate your_program \
+    --image docs/test_images/kodim23.png \
+    --output result.png
+
+# Override specific registers
+lzx-vhdl-cli simulate your_program \
+    --image docs/test_images/kodim23.png \
+    --set rotary_potentiometer_1=800 \
+    --set toggle_switch_7=1023 \
+    --output result.png
+
+# Export defaults → edit → re-import for reproducible test cases
+lzx-vhdl-cli export-regs your_program --output your_program_regs.json
+lzx-vhdl-cli simulate your_program \
+    --image docs/test_images/kodim23.png \
+    --import-regs your_program_regs.json \
+    --output result.png
+```
+
+The `lzx-vhdl-cli` script is installed automatically with `./run.sh --install`.
+Alternatively, the combined `lzx-vhdl-tester` entrypoint detects CLI
+sub-commands automatically:
+
+```bash
+lzx-vhdl-tester simulate your_program --image photo.png --output result.png
+python -m vhdl_image_tester simulate your_program --image photo.png
+```
+
+See the full [VHDL Image Tester README](../tools/vhdl-image-tester/README.md)
+for all CLI options, installation details, keyboard shortcuts, and
+troubleshooting.
 
 ## Examples
 
