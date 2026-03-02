@@ -105,9 +105,6 @@ class MainWindow(QMainWindow):
         self._program_panel.program_changed.connect(self._on_program_changed)
         self._program_panel.image_changed.connect(self._on_image_changed)
         self._program_panel.programs_root_changed.connect(self._on_programs_root_changed)
-        # Replay the initial selections — signals fired during ProgramPanel.__init__
-        # were emitted before these connections existed.
-        self._program_panel.initialize()
         h_split.addWidget(self._program_panel)
 
         # Right: vertical splitter (image viewer + register panel)
@@ -163,6 +160,10 @@ class MainWindow(QMainWindow):
         self._status_bar.addPermanentWidget(self._progress)
         self._status_lbl = QLabel("Ready")
         self._status_bar.addWidget(self._status_lbl)
+
+        # Replay initial selections — signals fired during ProgramPanel.__init__
+        # were emitted before any slots were connected.
+        self._program_panel.initialize()
 
     def _build_toolbar(self) -> QWidget:
         bar = QWidget()
