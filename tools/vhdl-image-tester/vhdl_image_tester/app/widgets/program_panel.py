@@ -14,7 +14,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from PyQt6.QtCore import Qt, pyqtSignal
+from PyQt6.QtCore import Qt, QTimer, pyqtSignal
 from PyQt6.QtGui import QPixmap
 from PyQt6.QtWidgets import (
     QComboBox,
@@ -258,7 +258,9 @@ class ProgramPanel(QWidget):
                 f"<i>{program.category}</i><br>"
                 f"{program.description[:120]}{'…' if len(program.description) > 120 else ''}"
             )
-            self.program_changed.emit(program)
+            # Defer emission so the combo-box popup can close before any
+            # downstream layout work (e.g. RegisterPanel rebuild) happens.
+            QTimer.singleShot(0, lambda p=program: self.program_changed.emit(p))
         except Exception as exc:  # noqa: BLE001
             self._prog_desc.setText(f"<span style='color:red'>Error: {exc}</span>")
 
