@@ -30,6 +30,7 @@ dev = [
 
 [project.scripts]
 lzx-vhdl-tester = "vhdl_image_tester.__main__:main"
+lzx-vhdl-cli    = "vhdl_image_tester.cli:main"
 
 [project.gui-scripts]
 lzx-vhdl-tester-gui = "vhdl_image_tester.__main__:main"

@@ -104,6 +104,8 @@ python videomancer-sdk/tools/vhdl-image-tester/run.py
 
 ## Usage
 
+### GUI mode (default)
+
 1. Launch the application using any method above.
 2. **(Optional)** Click the **`…`** button next to the **Folder** row at the top of the FPGA Program panel to choose a different programs source directory. By default the tool uses the `programs/` directory at the repository root.
 3. Select a **program** from the dropdown (populated from the programs folder).
@@ -111,6 +113,61 @@ python videomancer-sdk/tools/vhdl-image-tester/run.py
 5. Adjust **register sliders and toggles** to set control values.
 6. Press **F5** (or click **Generate**) to run the GHDL simulation.
 7. The before/after images appear side-by-side. Zoom with the scroll wheel.
+
+### CLI mode (headless)
+
+All pipeline features are available without a display server or PyQt6 GUI. CLI
+mode is activated when a known sub-command name is the first argument, or when
+`--no-gui` is passed.
+
+```bash
+# List available programs
+lzx-vhdl-cli list
+lzx-vhdl-cli list --programs-dir /path/to/programs
+
+# Show program metadata and parameter table
+lzx-vhdl-cli info cascade
+
+# Run the full VHDL simulation pipeline
+lzx-vhdl-cli simulate cascade \
+    --image docs/test_images/kodim23.png \
+    --output result.png
+
+# Override register values inline
+lzx-vhdl-cli simulate cascade \
+    --image photo.png \
+    --set rotary_potentiometer_1=800 \
+    --set toggle_switch_7=1023 \
+    --output result.png
+
+# Export default register values to JSON, edit, then import
+lzx-vhdl-cli export-regs cascade --output cascade_regs.json
+# … edit cascade_regs.json …
+lzx-vhdl-cli simulate cascade \
+    --image photo.png \
+    --import-regs cascade_regs.json \
+    --output result.png
+
+# Same using the combined entrypoint (subcommand detected automatically)
+lzx-vhdl-tester simulate cascade --image photo.png --output result.png
+python -m vhdl_image_tester simulate cascade --image photo.png --output result.png
+```
+
+#### `simulate` options reference
+
+| Option | Default | Description |
+|---|---|---|
+| `--image PATH` | (required) | Source image (PNG, JPEG, BMP, …) |
+| `--programs-dir DIR` | repo `programs/` | Override programs directory |
+| `--config CONFIG` | `sd_analog` | FPGA config string |
+| `--max-dim N` | 480 | Max image dimension (px) |
+| `--warmup-frames N` | 2 | Warmup frames before capture |
+| `--capture-frames N` | 1 | Output capture frames |
+| `--set KEY=VALUE` | — | Override a register value (repeatable) |
+| `--import-regs PATH` | — | Load registers from JSON (see `export-regs`) |
+| `--output PATH` | `<name>_output.png` | Output image path |
+| `--save-input` | off | Also save the resized input image |
+| `--build-dir DIR` | `/tmp/lzx_vit/<name>` | Override GHDL working directory |
 
 ---
 
@@ -123,14 +180,15 @@ videomancer-sdk/tools/vhdl-image-tester/
 ├── run.bat                             # Windows launcher with venv management
 ├── pyproject.toml                      # Package metadata and dependency declarations
 └── vhdl_image_tester/
-    ├── __main__.py                     # python -m vhdl_image_tester entry point
+    ├── __main__.py                     # python -m vhdl_image_tester / lzx-vhdl-tester entry point
+    ├── cli.py                          # Headless CLI (lzx-vhdl-cli) — all sub-commands
     ├── core/
     │   ├── config.py                   # Repo path detection, ABI constants, sim settings
     │   ├── program_loader.py           # Parse TOML → Program / Parameter dataclasses
     │   ├── image_converter.py          # RGB ↔ BT.601 YUV-10bit pixel stream
     │   ├── testbench_gen.py            # Generate tb_vit.vhd with register values
     │   ├── sim_runner.py               # Run GHDL (analyse → elaborate → simulate)
-    │   └── pipeline.py                 # QThread worker orchestrating the full flow
+    │   └── pipeline.py                 # run_pipeline() + SimulationWorker QThread wrapper
     └── app/
         ├── main_window.py              # Top-level QMainWindow
         └── widgets/

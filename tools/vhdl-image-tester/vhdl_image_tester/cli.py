@@ -1,0 +1,338 @@
+# Videomancer SDK - VHDL Image Tester
+# File: videomancer-sdk/tools/vhdl-image-tester/vhdl_image_tester/cli.py - Headless CLI for all pipeline features
+# Copyright (C) 2026 LZX Industries LLC. All Rights Reserved.
+
+"""
+Command-line interface for the VHDL Image Tester.
+
+All GUI features are available headlessly:
+
+  lzx-vhdl-cli list           [--programs-dir DIR]
+  lzx-vhdl-cli info  NAME     [--programs-dir DIR]
+  lzx-vhdl-cli simulate NAME  [--programs-dir DIR] [--image PATH]
+                              [--config CONFIG] [--max-dim N]
+                              [--warmup-frames N] [--capture-frames N]
+                              [--set KEY=VALUE ...] [--import-regs PATH]
+                              [--output PATH] [--build-dir DIR]
+  lzx-vhdl-cli export-regs NAME [--programs-dir DIR] [--output PATH]
+
+All sub-commands can also be reached via the main entrypoint with a
+``--no-gui`` flag or by detecting a known sub-command name as argv[1]:
+
+  python -m vhdl_image_tester simulate cascade ...
+  lzx-vhdl-tester simulate cascade ...
+"""
+
+from __future__ import annotations
+
+import argparse
+import json
+import logging
+import sys
+from pathlib import Path
+
+from .core.config import (
+    PROGRAMS_ROOT,
+    SIM_DEFAULT_CONFIG,
+    SIM_MAX_IMAGE_DIM,
+    SIM_WARMUP_FRAMES,
+    SIM_CAPTURE_FRAMES,
+)
+
+__all__ = ["main"]
+
+_log = logging.getLogger(__name__)
+
+
+# ---------------------------------------------------------------------------
+# Helpers
+# ---------------------------------------------------------------------------
+
+def _resolve_programs_root(raw: str | None) -> Path | None:
+    return Path(raw) if raw else None
+
+
+def _load_registers(
+    program,
+    set_args: list[str] | None,
+    import_path: str | None,
+) -> dict[str, int]:
+    """Build a register dict from *program* defaults, then apply overrides."""
+    regs: dict[str, int] = {}
+    for param in program.parameters:
+        regs[param.parameter_id] = param.initial_value
+
+    if import_path:
+        data = json.loads(Path(import_path).read_text())
+        for k, v in data.items():
+            regs[k] = int(v)
+        print(f"[cli] Imported registers from {import_path}")
+
+    for kv in (set_args or []):
+        if "=" not in kv:
+            print(f"[cli] WARNING: ignoring malformed --set argument: {kv!r} (expected KEY=VALUE)")
+            continue
+        k, _, v = kv.partition("=")
+        regs[k.strip()] = int(v.strip())
+
+    return regs
+
+
+# ---------------------------------------------------------------------------
+# Sub-command: list
+# ---------------------------------------------------------------------------
+
+def _cmd_list(args: argparse.Namespace) -> int:
+    from .core.program_loader import list_programs
+
+    pr = _resolve_programs_root(args.programs_dir)
+    programs = list_programs(pr)
+    if not programs:
+        print("(no programs found)")
+        return 0
+    for name in programs:
+        print(name)
+    print(f"\n{len(programs)} program(s) found.")
+    return 0
+
+
+# ---------------------------------------------------------------------------
+# Sub-command: info
+# ---------------------------------------------------------------------------
+
+def _cmd_info(args: argparse.Namespace) -> int:
+    from .core.program_loader import load_program
+
+    pr = _resolve_programs_root(args.programs_dir)
+    try:
+        prog = load_program(args.name, pr)
+    except (FileNotFoundError, ValueError) as exc:
+        print(f"[cli] ERROR: {exc}", file=sys.stderr)
+        return 1
+
+    print(f"Name:        {prog.name}")
+    print(f"Program ID:  {prog.program_id}")
+    print(f"Display:     {prog.program_name}")
+    print(f"Category:    {prog.category}")
+    print(f"Core:        {prog.core}")
+    print(f"Description: {prog.description}")
+    print(f"Author:      {prog.author}")
+    print(f"License:     {prog.license}")
+    print(f"Directory:   {prog.program_dir}")
+    if prog.parameters:
+        print(f"\nParameters ({len(prog.parameters)}):")
+        for p in prog.parameters:
+            print(
+                f"  {p.parameter_id:<35}  "
+                f"default={p.initial_value:>4}  "
+                f"[{p.display_min_value}–{p.display_max_value}{' ' + p.suffix_label if p.suffix_label else ''}]"
+                f"  \"{p.name_label}\""
+            )
+    else:
+        print("\n(no parameters)")
+    return 0
+
+
+# ---------------------------------------------------------------------------
+# Sub-command: export-regs
+# ---------------------------------------------------------------------------
+
+def _cmd_export_regs(args: argparse.Namespace) -> int:
+    from .core.program_loader import load_program
+
+    pr = _resolve_programs_root(args.programs_dir)
+    try:
+        prog = load_program(args.name, pr)
+    except (FileNotFoundError, ValueError) as exc:
+        print(f"[cli] ERROR: {exc}", file=sys.stderr)
+        return 1
+
+    regs: dict[str, int] = {p.parameter_id: p.initial_value for p in prog.parameters}
+
+    output = args.output or f"{args.name}_registers.json"
+    Path(output).write_text(json.dumps(regs, indent=2))
+    print(f"Exported {len(regs)} register(s) → {output}")
+    return 0
+
+
+# ---------------------------------------------------------------------------
+# Sub-command: simulate
+# ---------------------------------------------------------------------------
+
+def _cmd_simulate(args: argparse.Namespace) -> int:
+    from PIL import Image
+
+    from .core.program_loader import load_program
+    from .core.pipeline import run_pipeline
+
+    pr = _resolve_programs_root(args.programs_dir)
+
+    # Load program
+    try:
+        prog = load_program(args.name, pr)
+    except (FileNotFoundError, ValueError) as exc:
+        print(f"[cli] ERROR: {exc}", file=sys.stderr)
+        return 1
+
+    # Load source image
+    image_path = Path(args.image) if args.image else None
+    if image_path is None:
+        print("[cli] ERROR: --image is required for the simulate sub-command.", file=sys.stderr)
+        return 1
+    if not image_path.exists():
+        print(f"[cli] ERROR: image not found: {image_path}", file=sys.stderr)
+        return 1
+    try:
+        source = Image.open(image_path).convert("RGB")
+    except Exception as exc:  # noqa: BLE001
+        print(f"[cli] ERROR: cannot open image: {exc}", file=sys.stderr)
+        return 1
+
+    # Assemble register values
+    regs = _load_registers(prog, args.set, getattr(args, "import_regs", None))
+
+    # Determine build dir override
+    build_dir = Path(args.build_dir) if getattr(args, "build_dir", None) else None
+
+    # Run pipeline
+    result = run_pipeline(
+        program         = prog,
+        source_image    = source,
+        register_values = regs,
+        fpga_config     = args.config,
+        max_image_dim   = args.max_dim,
+        warmup_frames   = args.warmup_frames,
+        capture_frames  = args.capture_frames,
+        log_callback    = print,
+        build_dir       = build_dir,
+    )
+
+    print(f"\nElapsed: {result.elapsed_s:.1f}s")
+
+    if not result.success:
+        print("[cli] SIMULATION FAILED.", file=sys.stderr)
+        return 1
+
+    # Save output
+    output_path = Path(args.output) if args.output else Path(f"{args.name}_output.png")
+    result.output_image.save(output_path)
+    print(f"Output saved → {output_path}")
+
+    # Optionally save the (resized) input alongside
+    if getattr(args, "save_input", False):
+        input_path = output_path.with_name(output_path.stem + "_input" + output_path.suffix)
+        result.input_image.save(input_path)
+        print(f"Input saved  → {input_path}")
+
+    return 0
+
+
+# ---------------------------------------------------------------------------
+# Argument parser
+# ---------------------------------------------------------------------------
+
+def _build_parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(
+        prog        = "lzx-vhdl-cli",
+        description = "Headless CLI for the LZX VHDL Image Tester.",
+    )
+    sub = parser.add_subparsers(dest="subcommand", metavar="SUBCOMMAND")
+    sub.required = True
+
+    # ── list ─────────────────────────────────────────────────────────────────
+    p_list = sub.add_parser("list", help="List available programs.")
+    p_list.add_argument(
+        "--programs-dir", metavar="DIR", default=None,
+        help=f"Override programs directory (default: {PROGRAMS_ROOT})",
+    )
+
+    # ── info ─────────────────────────────────────────────────────────────────
+    p_info = sub.add_parser("info", help="Show program metadata and parameters.")
+    p_info.add_argument("name", help="Program name (e.g. cascade)")
+    p_info.add_argument("--programs-dir", metavar="DIR", default=None)
+
+    # ── export-regs ───────────────────────────────────────────────────────────
+    p_export = sub.add_parser("export-regs", help="Export default register values to JSON.")
+    p_export.add_argument("name", help="Program name")
+    p_export.add_argument("--programs-dir", metavar="DIR", default=None)
+    p_export.add_argument(
+        "--output", "-o", metavar="PATH", default=None,
+        help="Output JSON file (default: <name>_registers.json)",
+    )
+
+    # ── simulate ──────────────────────────────────────────────────────────────
+    p_sim = sub.add_parser("simulate", help="Run the full VHDL simulation pipeline.")
+    p_sim.add_argument("name", help="Program name (e.g. cascade)")
+    p_sim.add_argument(
+        "--image", "-i", metavar="PATH", required=True,
+        help="Source image file (PNG, JPEG, BMP, …)",
+    )
+    p_sim.add_argument(
+        "--programs-dir", metavar="DIR", default=None,
+        help=f"Override programs directory (default: {PROGRAMS_ROOT})",
+    )
+    p_sim.add_argument(
+        "--config", metavar="CONFIG", default=SIM_DEFAULT_CONFIG,
+        help=f"FPGA config string (default: {SIM_DEFAULT_CONFIG})",
+    )
+    p_sim.add_argument(
+        "--max-dim", metavar="N", type=int, default=SIM_MAX_IMAGE_DIM,
+        help=f"Maximum image dimension in pixels (default: {SIM_MAX_IMAGE_DIM})",
+    )
+    p_sim.add_argument(
+        "--warmup-frames", metavar="N", type=int, default=SIM_WARMUP_FRAMES,
+        help=f"Warmup frames (default: {SIM_WARMUP_FRAMES})",
+    )
+    p_sim.add_argument(
+        "--capture-frames", metavar="N", type=int, default=SIM_CAPTURE_FRAMES,
+        help=f"Capture frames (default: {SIM_CAPTURE_FRAMES})",
+    )
+    p_sim.add_argument(
+        "--set", metavar="KEY=VALUE", action="append", dest="set",
+        help="Override a register value, e.g. --set rotary_potentiometer_1=512. Repeatable.",
+    )
+    p_sim.add_argument(
+        "--import-regs", metavar="PATH",
+        help="Import register values from a JSON file (see export-regs).",
+    )
+    p_sim.add_argument(
+        "--output", "-o", metavar="PATH",
+        help="Output image path (default: <name>_output.png)",
+    )
+    p_sim.add_argument(
+        "--save-input", action="store_true",
+        help="Also save the (resized) input image alongside the output.",
+    )
+    p_sim.add_argument(
+        "--build-dir", metavar="DIR", default=None,
+        help="Override the GHDL build directory for this run.",
+    )
+
+    return parser
+
+
+# ---------------------------------------------------------------------------
+# Entry point
+# ---------------------------------------------------------------------------
+
+def main(argv: list[str] | None = None) -> None:
+    """CLI entry point.  Call with ``argv=None`` to use ``sys.argv``."""
+    logging.basicConfig(level=logging.WARNING, format="%(levelname)s: %(message)s")
+
+    parser = _build_parser()
+    args = parser.parse_args(argv)
+
+    handlers: dict[str, object] = {
+        "list":        _cmd_list,
+        "info":        _cmd_info,
+        "export-regs": _cmd_export_regs,
+        "simulate":    _cmd_simulate,
+    }
+
+    handler = handlers.get(args.subcommand)
+    if handler is None:
+        parser.print_help()
+        sys.exit(1)
+
+    rc = handler(args)  # type: ignore[operator]
+    sys.exit(rc or 0)
