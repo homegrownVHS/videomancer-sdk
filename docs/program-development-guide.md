@@ -223,6 +223,44 @@ file size by approximately 60%. The firmware decompresses transparently
 during FPGA configuration. Use `--no-compress` to disable compression
 if needed. See [Bitstream Compression](bitstream-compression.md).
 
+### Step 7: Verify With the VHDL Image Tester
+
+The **VHDL Image Tester** (`videomancer-sdk/tools/vhdl-image-tester/`) lets you run any
+Videomancer program as an **authentic GHDL simulation** on a still image and
+inspect the processed result side-by-side with the original — no FPGA hardware
+required.
+
+```bash
+# First-time setup (creates a virtual environment and installs PyQt6/NumPy/Pillow):
+cd videomancer-sdk/tools/vhdl-image-tester
+./run.sh --install
+
+# Launch:
+./run.sh
+```
+
+Or launch directly without installing:
+
+```bash
+python videomancer-sdk/tools/vhdl-image-tester/run.py
+```
+
+**Workflow:**
+1. Select your program from the dropdown.
+2. Select a source image (test images are in `docs/test_images/`).
+3. Adjust register sliders to the values you want to test.
+4. Press **F5** to simulate. Before/after images appear immediately.
+
+The tester uses the same GHDL toolchain as the FPGA build — it analyses every
+SDK package and your program's VHDL source files, elaborates the testbench, and
+drives the DUT clock-by-clock using a BT.601-converted pixel stream derived from
+the source image. This means any simulation discrepancy indicates a genuine VHDL
+bug rather than a simulator abstraction artifact.
+
+Use **Export Regs** to save parameter presets as JSON for reproducible test
+cases. See the full [VHDL Image Tester README](../tools/vhdl-image-tester/README.md)
+for installation details, keyboard shortcuts, and troubleshooting.
+
 ## Examples
 
 - `programs/passthru` - Minimal reference (1 clock latency)
@@ -235,4 +273,5 @@ if needed. See [Bitstream Compression](bitstream-compression.md).
 - [Bitstream Compression](bitstream-compression.md)
 - [ABI Format](abi-format.md)
 - [Package Signing](package-signing-guide.md)
+- [VHDL Image Tester](../tools/vhdl-image-tester/README.md)
 

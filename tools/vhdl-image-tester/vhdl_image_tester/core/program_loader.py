@@ -1,0 +1,252 @@
+# Videomancer SDK - VHDL Image Tester
+# File: videomancer-sdk/tools/vhdl-image-tester/vhdl_image_tester/core/program_loader.py - TOML program metadata parser
+# Copyright (C) 2026 LZX Industries LLC. All Rights Reserved.
+
+"""Load and represent Videomancer FPGA program metadata from TOML files."""
+
+from __future__ import annotations
+
+import re
+import sys
+from dataclasses import dataclass, field
+from pathlib import Path
+
+if sys.version_info >= (3, 11):
+    import tomllib
+else:
+    try:
+        import tomllib  # type: ignore[no-redef]
+    except ImportError:
+        import tomli as tomllib  # type: ignore[no-redef]
+
+from .config import PROGRAMS_ROOT, PARAM_ID_TO_REGISTER, ABI_REG_TOGGLES, ABI_TOGGLE_BIT
+
+
+# ---------------------------------------------------------------------------
+# Parameter dataclass
+# ---------------------------------------------------------------------------
+
+@dataclass
+class Parameter:
+    """Describes a single control parameter from the TOML [[parameter]] array."""
+
+    parameter_id:        str
+    name_label:          str
+    control_mode:        str         = "linear"
+    display_min_value:   float       = 0.0
+    display_max_value:   float       = 100.0
+    initial_value:       int         = 512         # raw 10-bit register value (pots)
+    initial_value_label: str         = ""          # "Off" | "On" (toggles)
+    suffix_label:        str         = ""
+    value_labels:        list[str]   = field(default_factory=list)
+    display_float_digits: int        = 0
+
+    @property
+    def is_toggle(self) -> bool:
+        return self.parameter_id.startswith("toggle_switch_")
+
+    @property
+    def is_pot(self) -> bool:
+        return self.parameter_id.startswith("rotary_potentiometer_")
+
+    @property
+    def is_fader(self) -> bool:
+        return self.parameter_id == "linear_potentiometer_12"
+
+    @property
+    def register_index(self) -> int:
+        return PARAM_ID_TO_REGISTER.get(self.parameter_id, 0)
+
+    @property
+    def toggle_bit(self) -> int | None:
+        """Bit position within register 6 for toggle switches (or None)."""
+        return ABI_TOGGLE_BIT.get(self.parameter_id)
+
+    @property
+    def initial_toggle_state(self) -> bool:
+        """Resolved initial boolean state for toggle switches."""
+        if self.initial_value_label:
+            return self.initial_value_label.lower() not in ("off", "0", "false", "")
+        return bool(self.initial_value > 511)
+
+    @property
+    def initial_pot_value(self) -> int:
+        """10-bit raw register value clamped to [0, 1023]."""
+        return max(0, min(1023, self.initial_value))
+
+
+# ---------------------------------------------------------------------------
+# Program dataclass
+# ---------------------------------------------------------------------------
+
+@dataclass
+class Program:
+    """Complete metadata for a Videomancer FPGA program."""
+
+    name:           str
+    toml_path:      Path
+    program_dir:    Path
+
+    # [program] fields
+    program_id:     str    = ""
+    program_name:   str    = ""
+    version:        str    = "1.0.0"
+    author:         str    = ""
+    category:       str    = ""
+    description:    str    = ""
+    core:           str    = "yuv444_30b"
+
+    # Pipeline delay override (-1 = auto-detect via testbench, >=0 = fixed clocks)
+    pipeline_delay: int    = -1
+
+    # [[parameter]] array
+    parameters:     list[Parameter] = field(default_factory=list)
+
+    @property
+    def vhd_files(self) -> list[Path]:
+        """All VHDL files in the program directory, main architecture last."""
+        all_vhd = sorted(self.program_dir.glob("*.vhd"))
+        main_arch = [f for f in all_vhd if _is_program_top_arch(f)]
+        supporting = [f for f in all_vhd if f not in main_arch]
+        return supporting + main_arch
+
+    @property
+    def display_name(self) -> str:
+        return self.program_name or self.name.title()
+    @property
+    def effective_pipeline_delay(self) -> int:
+        """
+        Resolve the pipeline delay in priority order:
+          1. TOML ``pipeline_delay`` field (>= 0)
+          2. ``C_PROCESSING_DELAY_CLKS`` parsed from the program's VHDL source
+          3. 0  (no delay compensation)
+        """
+        if self.pipeline_delay >= 0:
+            return self.pipeline_delay
+        vhdl_delay = _parse_processing_delay(self.program_dir)
+        if vhdl_delay is not None:
+            return vhdl_delay
+        return 0
+    def build_register_array(self, values: dict[str, int]) -> list[int]:
+        """
+        Given a mapping of parameter_id → raw 10-bit value, build the
+        full 32-element register array for the FPGA ABI.
+
+        values: {
+            "rotary_potentiometer_1": 512,
+            "toggle_switch_7": 1,   # 1 = ON, 0 = OFF
+            ...
+        }
+        """
+        from .config import ABI_SPI_RAM_SIZE
+        regs = [0] * ABI_SPI_RAM_SIZE
+        for param in self.parameters:
+            raw = values.get(param.parameter_id, param.initial_pot_value if not param.is_toggle else 0)
+            if param.is_toggle:
+                bit = param.toggle_bit
+                if bit is not None and raw:
+                    regs[ABI_REG_TOGGLES] |= (1 << bit)
+            else:
+                regs[param.register_index] = max(0, min(1023, raw))
+        return regs
+
+
+# ---------------------------------------------------------------------------
+# Loaders
+# ---------------------------------------------------------------------------
+
+def _is_program_top_arch(path: Path) -> bool:
+    """Return True if the file contains 'architecture ... of program_top'."""
+    try:
+        text = path.read_text(encoding="utf-8", errors="replace").lower()
+        return "of program_top" in text
+    except OSError:
+        return False
+
+
+_RE_PROCESSING_DELAY = re.compile(
+    r"C_PROCESSING_DELAY_CLKS\s*:\s*integer\s*:=\s*(\d+)",
+    re.IGNORECASE,
+)
+
+
+def _parse_processing_delay(program_dir: Path) -> int | None:
+    """
+    Scan .vhd files in *program_dir* for a ``C_PROCESSING_DELAY_CLKS``
+    constant declaration and return its integer value, or None if not found.
+    """
+    for vhd_file in sorted(program_dir.glob("*.vhd")):
+        try:
+            text = vhd_file.read_text(encoding="utf-8", errors="replace")
+        except OSError:
+            continue
+        m = _RE_PROCESSING_DELAY.search(text)
+        if m:
+            return int(m.group(1))
+    return None
+
+
+def load_program(name: str, programs_root: Path | None = None) -> Program:
+    """Load a Program from its TOML file by directory name.
+
+    Args:
+        name:          The program directory name (e.g. ``"emboss"``)
+        programs_root: Override the programs directory. Defaults to the
+                       repository-deduced ``PROGRAMS_ROOT`` from *config*.
+    """
+    root        = programs_root if programs_root is not None else PROGRAMS_ROOT
+    program_dir = root / name
+    toml_path   = program_dir / f"{name}.toml"
+    if not toml_path.exists():
+        raise FileNotFoundError(f"TOML not found: {toml_path}")
+
+    with toml_path.open("rb") as fh:
+        data = tomllib.load(fh)
+
+    prog_data = data.get("program", {})
+    parameters: list[Parameter] = []
+    for p in data.get("parameter", []):
+        parameters.append(Parameter(
+            parameter_id         = p.get("parameter_id", ""),
+            name_label           = p.get("name_label", ""),
+            control_mode         = p.get("control_mode", "linear"),
+            display_min_value    = float(p.get("display_min_value", 0)),
+            display_max_value    = float(p.get("display_max_value", 100)),
+            initial_value        = int(p.get("initial_value", 512)),
+            initial_value_label  = p.get("initial_value_label", ""),
+            suffix_label         = p.get("suffix_label", ""),
+            value_labels         = p.get("value_labels", []),
+            display_float_digits = int(p.get("display_float_digits", 0)),
+        ))
+
+    return Program(
+        name         = name,
+        toml_path    = toml_path,
+        program_dir  = program_dir,
+        program_id   = prog_data.get("program_id", ""),
+        program_name = prog_data.get("program_name", name.title()),
+        version      = prog_data.get("program_version", "1.0.0"),
+        author       = prog_data.get("author", ""),
+        category     = prog_data.get("category", ""),
+        description  = prog_data.get("description", ""),
+        core         = prog_data.get("core", "yuv444_30b"),
+        pipeline_delay = int(prog_data.get("pipeline_delay", -1)),
+        parameters   = parameters,
+    )
+
+
+def list_programs(programs_root: Path | None = None) -> list[str]:
+    """Return sorted list of program directory names that have a matching TOML file.
+
+    Args:
+        programs_root: Directory to scan.  Defaults to the repository-deduced
+                       ``PROGRAMS_ROOT`` from *config*.
+    """
+    root = programs_root if programs_root is not None else PROGRAMS_ROOT
+    if not root.exists():
+        return []
+    return sorted(
+        d.name
+        for d in root.iterdir()
+        if d.is_dir() and (d / f"{d.name}.toml").exists()
+    )

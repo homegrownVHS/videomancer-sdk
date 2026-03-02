@@ -1,0 +1,300 @@
+# VHDL Image Tester
+
+A PyQt6 GUI application that runs any Videomancer FPGA program as an **authentic GHDL simulation** on a user-selected still image and displays the processed output side-by-side with the original.
+
+Part of the [Videomancer SDK](https://github.com/lzxindustries/videomancer-sdk). Requires a Videomancer repository checkout that includes the `programs/` directory.
+
+---
+
+## Requirements
+
+### GHDL
+
+GHDL is the VHDL simulator used to run programs. The recommended installation is via the **OSS CAD Suite** bundle (already used by the SDK build system):
+
+```bash
+# Option A — OSS CAD Suite (recommended, same toolchain as the SDK build)
+# Download the latest release from https://github.com/YosysHQ/oss-cad-suite-build/releases
+# Then add it to your PATH before running the tester:
+export PATH="/path/to/oss-cad-suite/bin:$PATH"
+
+# Option B — system package (Ubuntu/Debian)
+sudo apt install ghdl
+
+# Option C — macOS via Homebrew
+brew install ghdl
+```
+
+Verify: `ghdl --version` (must report ≥ 3.0).
+
+### Python
+
+Python ≥ 3.10 is required.
+
+```bash
+# Ubuntu/Debian
+sudo apt install python3 python3-venv python3-pip
+
+# macOS (via Homebrew)
+brew install python@3.12
+
+# Windows
+# Download from https://www.python.org/downloads/
+# (Python 3.12 recommended)
+```
+
+### Python Dependencies
+
+| Package | Version | Purpose                       |
+|---------|---------|-------------------------------|
+| PyQt6   | ≥ 6.6   | GUI framework                 |
+| Pillow  | ≥ 10.0  | Image I/O                     |
+| NumPy   | ≥ 1.24  | YUV pixel arithmetic          |
+
+All Python dependencies are installed automatically by the launchers below.
+
+---
+
+## Installation & Quick Start
+
+### Linux / macOS
+
+```bash
+# From the Videomancer repository root:
+cd videomancer-sdk/tools/vhdl-image-tester
+
+# First-time setup — creates .venv and installs all dependencies:
+./run.sh --install
+
+# Launch the application:
+./run.sh
+```
+
+### Windows
+
+```bat
+rem From the Videomancer repository root:
+cd videomancer-sdk\tools\vhdl-image-tester
+
+rem First-time setup — creates .venv and installs all dependencies:
+run.bat --install
+
+rem Launch the application:
+run.bat
+```
+
+### Install as a Python package (any platform)
+
+```bash
+# Install into the current Python environment:
+pip install -e videomancer-sdk/tools/vhdl-image-tester/
+
+# Launch:
+lzx-vhdl-tester
+```
+
+### Run without installing (convenience launcher)
+
+```bash
+# From the Videomancer repository root:
+python videomancer-sdk/tools/vhdl-image-tester/run.py
+```
+
+---
+
+## Usage
+
+1. Launch the application using any method above.
+2. **(Optional)** Click the **`…`** button next to the **Folder** row at the top of the FPGA Program panel to choose a different programs source directory. By default the tool uses the `programs/` directory at the repository root.
+3. Select a **program** from the dropdown (populated from the programs folder).
+4. Select a **source image** from the file browser (or use a test image from `docs/test_images/`).
+5. Adjust **register sliders and toggles** to set control values.
+6. Press **F5** (or click **Generate**) to run the GHDL simulation.
+7. The before/after images appear side-by-side. Zoom with the scroll wheel.
+
+---
+
+## Architecture
+
+```
+videomancer-sdk/tools/vhdl-image-tester/
+├── run.py                              # Convenience launcher (no install required)
+├── run.sh                              # Linux/macOS launcher with venv management
+├── run.bat                             # Windows launcher with venv management
+├── pyproject.toml                      # Package metadata and dependency declarations
+└── vhdl_image_tester/
+    ├── __main__.py                     # python -m vhdl_image_tester entry point
+    ├── core/
+    │   ├── config.py                   # Repo path detection, ABI constants, sim settings
+    │   ├── program_loader.py           # Parse TOML → Program / Parameter dataclasses
+    │   ├── image_converter.py          # RGB ↔ BT.601 YUV-10bit pixel stream
+    │   ├── testbench_gen.py            # Generate tb_vit.vhd with register values
+    │   ├── sim_runner.py               # Run GHDL (analyse → elaborate → simulate)
+    │   └── pipeline.py                 # QThread worker orchestrating the full flow
+    └── app/
+        ├── main_window.py              # Top-level QMainWindow
+        └── widgets/
+            ├── program_panel.py        # Program + image source selection panel
+            ├── register_panel.py       # Per-parameter control widgets (sliders/toggles)
+            ├── image_viewer.py         # Before/after image viewer with zoom
+            └── log_panel.py            # Streaming GHDL log output
+```
+
+---
+
+## Simulation Pipeline
+
+```
+User selects program + image + register settings
+        │
+        ▼
+[1] Resize image to simulation dimensions (configurable max, default 480 px)
+        │
+        ▼
+[2] Convert RGB → BT.601 YUV-10bit
+    Build timing stimulus: N warmup frames + 1 capture frame
+    Write stimulus.txt  (one clock cycle per line)
+        │
+        ▼
+[3] Generate tb_vit.vhd VHDL-2008 testbench
+    • Reads stimulus.txt → drives program_top DUT clock-by-clock
+    • Writes output.txt  (captured avid pixels from capture frame)
+        │
+        ▼
+[4] GHDL simulation
+    ghdl -a  (analyse SDK packages + program VHD files + testbench)
+    ghdl -e  (elaborate tb_vit)
+    ghdl -r  (run; self-terminates with std.env.stop)
+        │
+        ▼
+[5] Read output.txt → convert YUV-10bit → RGB
+    Display side-by-side with input in GUI
+```
+
+---
+
+## Register / ABI Mapping
+
+```
+registers_in(0)     rotary_potentiometer_1   10-bit (0–1023)
+registers_in(1)     rotary_potentiometer_2
+registers_in(2)     rotary_potentiometer_3
+registers_in(3)     rotary_potentiometer_4
+registers_in(4)     rotary_potentiometer_5
+registers_in(5)     rotary_potentiometer_6
+registers_in(6)     toggle_switch_7..11      bit 0..4 packed
+registers_in(7)     linear_potentiometer_12  10-bit (0–1023)
+registers_in(8)     video_timing_id          4-bit
+```
+
+See [ABI Format](../../docs/abi-format.md) for the full specification.
+
+---
+
+## Simulation Settings
+
+| Setting         | Default     | Notes                                          |
+|-----------------|-------------|------------------------------------------------|
+| FPGA config     | sd_analog   | `sd_analog` / `hd_analog` / etc.              |
+| Max image dim   | 480 px      | Resize limit; smaller = faster simulation      |
+| Warmup frames   | 2           | Frames driven before capture; increase for     |
+|                 |             | programs with deep line-delay pipelines        |
+
+---
+
+## Build Artefacts
+
+All GHDL working files and stimulus/output pixel data land in:
+
+```
+/tmp/lzx_vit/<program_name>/
+├── stimulus.txt    # Input pixel stream (one clock cycle per line)
+├── output.txt      # Captured output pixels
+├── tb_vit.vhd      # Generated testbench
+└── work-obj08.cf   # GHDL analysis work library
+```
+
+Override the build directory with the `LZX_VIT_BUILD_DIR` environment variable.
+
+---
+
+## Keyboard Shortcuts
+
+| Key    | Action                          |
+|--------|---------------------------------|
+| F5     | Generate (run simulation)       |
+| Ctrl+S | Save output image               |
+| F      | Fit images to view              |
+
+---
+
+## Register Import/Export
+
+Save current register settings to a JSON file via **Export Regs**, then reload
+them later with **Import Regs**. This lets you create reproducible test presets.
+
+```json
+{
+  "program": "emboss",
+  "program_name": "Emboss",
+  "fpga_config": "sd_analog",
+  "registers": {
+    "rotary_potentiometer_1": 512,
+    "toggle_switch_7": 1,
+    "linear_potentiometer_12": 1023
+  },
+  "register_array": [512, 0, 0, 0, 0, 0, 1, 1023, 0, 0, 0, 0, 0, 0, 0, 0,
+                     0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
+}
+```
+
+---
+
+## Launcher Reference
+
+### run.sh / run.bat
+
+```
+Usage: ./run.sh [OPTION]
+
+Options:
+  (none)      Launch the application
+  --install   Create .venv and install all dependencies (run once after cloning)
+  --test      Run the test suite (pytest)
+  --lint      Run linter (ruff) and type checker (mypy)
+  --help      Show this help message
+```
+
+---
+
+## Troubleshooting
+
+| Symptom | Likely cause | Fix |
+|---------|--------------|-----|
+| `ghdl: command not found` | GHDL not on PATH | Add OSS CAD Suite to PATH, or install GHDL separately |
+| `Cannot locate Videomancer repository root` | Tool run outside repo tree | Run from within the Videomancer repository |
+| `No programs found` | `programs/` directory empty or missing | Ensure you are running from a full Videomancer repo checkout |
+| `ModuleNotFoundError: PyQt6` | Dependencies not installed | Run `./run.sh --install` (or `run.bat --install`) |
+| Simulation hangs | Program requires many warmup frames | Increase **Warmup frames** in settings |
+
+---
+
+## Development
+
+```bash
+# Install in editable mode with dev extras (linters, type checker, test runner):
+pip install -e "videomancer-sdk/tools/vhdl-image-tester/[dev]"
+
+# Run linter:
+cd videomancer-sdk/tools/vhdl-image-tester && ./run.sh --lint
+
+# Run tests:
+cd videomancer-sdk/tools/vhdl-image-tester && ./run.sh --test
+```
+
+---
+
+## License
+
+Copyright (C) 2026 LZX Industries LLC. All Rights Reserved.
+Proprietary and confidential. Unauthorized use is prohibited.

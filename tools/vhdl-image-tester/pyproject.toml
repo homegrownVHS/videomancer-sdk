@@ -1,0 +1,50 @@
+[build-system]
+requires = ["setuptools>=68.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "lzx-vhdl-image-tester"
+version = "0.1.0"
+description = "VHDL Image Processing Test Framework — run any Videomancer FPGA program on still images using authentic GHDL simulation"
+readme = "README.md"
+license = {text = "Proprietary"}
+requires-python = ">=3.10"
+authors = [
+    {name = "LZX Industries LLC"},
+]
+
+dependencies = [
+    "PyQt6>=6.6",
+    "numpy>=1.24",
+    "Pillow>=10.0",
+    "tomllib; python_version < '3.11'",
+]
+
+[project.optional-dependencies]
+dev = [
+    "ruff>=0.4",
+    "mypy>=1.10",
+    "pytest>=8.0",
+    "pytest-qt>=4.3",
+]
+
+[project.scripts]
+lzx-vhdl-tester = "vhdl_image_tester.__main__:main"
+
+[project.gui-scripts]
+lzx-vhdl-tester-gui = "vhdl_image_tester.__main__:main"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["vhdl_image_tester*"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py310"
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "UP"]
+
+[tool.mypy]
+python_version = "3.10"
+strict = true
