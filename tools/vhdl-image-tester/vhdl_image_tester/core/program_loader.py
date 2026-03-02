@@ -104,11 +104,13 @@ class Program:
 
     @property
     def vhd_files(self) -> list[Path]:
-        """All VHDL files in the program directory, main architecture last."""
+        """All VHDL files in the program directory, dependency-sorted,
+        main architecture last."""
+        from .sim_runner import _toposort_vhdl
         all_vhd = sorted(self.program_dir.glob("*.vhd"))
         main_arch = [f for f in all_vhd if _is_program_top_arch(f)]
         supporting = [f for f in all_vhd if f not in main_arch]
-        return supporting + main_arch
+        return _toposort_vhdl(supporting) + main_arch
 
     @property
     def display_name(self) -> str:

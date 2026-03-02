@@ -121,13 +121,89 @@ def _append_if_exists(lst: list[Path], path: Path) -> None:
 
 def _ordered_program_sources(program_dir: Path) -> list[Path]:
     """
-    Return the program's VHDL files with the program_top architecture last.
-    Supporting entity files come first (sorted alphabetically).
+    Return the program's VHDL files in dependency order, with the
+    program_top architecture last.
+
+    Supporting entity files are topologically sorted so that any file
+    defining ``entity <name>`` is analysed before files that instantiate
+    ``entity work.<name>``.  Files with no cross-dependencies fall back
+    to alphabetical order.
     """
     all_vhd   = sorted(program_dir.glob("*.vhd"))
     main_arch = [f for f in all_vhd if _is_program_top_arch(f)]
     supporting = [f for f in all_vhd if f not in main_arch]
-    return supporting + main_arch
+    return _toposort_vhdl(supporting) + main_arch
+
+
+def _toposort_vhdl(files: list[Path]) -> list[Path]:
+    """
+    Topologically sort VHDL source files by direct entity instantiation
+    dependencies (``entity work.<name>``).
+
+    Falls back to alphabetical order for files with no inter-dependencies.
+    """
+    if len(files) <= 1:
+        return list(files)
+
+    _re_entity_decl = re.compile(
+        r"^\s*entity\s+(\w+)\s+is\b", re.IGNORECASE | re.MULTILINE
+    )
+    _re_entity_inst = re.compile(
+        r"\bentity\s+work\.(\w+)\b", re.IGNORECASE
+    )
+
+    # Map: entity name → file that declares it
+    entity_to_file: dict[str, Path] = {}
+    # Map: file → set of entity names it instantiates from work
+    file_deps: dict[Path, set[str]] = {}
+
+    for f in files:
+        try:
+            text = f.read_text(encoding="utf-8", errors="replace")
+        except OSError:
+            file_deps[f] = set()
+            continue
+
+        for m in _re_entity_decl.finditer(text):
+            entity_to_file[m.group(1).lower()] = f
+
+        refs = {m.group(1).lower() for m in _re_entity_inst.finditer(text)}
+        file_deps[f] = refs
+
+    # Build adjacency: file → set of files it depends on (within this list)
+    adj: dict[Path, set[Path]] = {}
+    for f in files:
+        deps = set()
+        for entity_name in file_deps.get(f, set()):
+            dep_file = entity_to_file.get(entity_name)
+            if dep_file is not None and dep_file != f:
+                deps.add(dep_file)
+        adj[f] = deps
+
+    # Kahn's algorithm (stable — uses original alphabetical order as tiebreaker)
+    in_degree: dict[Path, int] = {f: 0 for f in files}
+    for f in files:
+        for dep in adj[f]:
+            # dep must come before f, so f has an incoming edge from dep
+            in_degree[f] = in_degree.get(f, 0) + 1
+
+    queue = [f for f in files if in_degree[f] == 0]  # preserves alpha order
+    result: list[Path] = []
+    while queue:
+        node = queue.pop(0)
+        result.append(node)
+        for f in files:
+            if node in adj[f]:
+                in_degree[f] -= 1
+                if in_degree[f] == 0:
+                    queue.append(f)
+
+    # Append any remaining files (cycle fallback — shouldn't happen)
+    for f in files:
+        if f not in result:
+            result.append(f)
+
+    return result
 
 
 def _is_program_top_arch(path: Path) -> bool:
