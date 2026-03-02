@@ -1,0 +1,23 @@
+# Python virtual environment
+.venv/
+venv/
+env/
+
+# Editable install / egg-info
+*.egg-info/
+*.egg
+
+# Distribution / build output
+dist/
+build/
+
+# Byte-compiled files
+__pycache__/
+*.py[cod]
+
+# pytest cache
+.pytest_cache/
+
+# mypy / ruff caches
+.mypy_cache/
+.ruff_cache/
