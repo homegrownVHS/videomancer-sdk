@@ -64,8 +64,12 @@ def _load_registers(
 
     if import_path:
         data = json.loads(Path(import_path).read_text())
-        for k, v in data.items():
-            regs[k] = int(v)
+        # Support both flat format {param_id: value} and GUI format
+        # {program, registers: {param_id: value}, ...}
+        reg_data = data.get("registers", data) if isinstance(data, dict) else data
+        for k, v in reg_data.items():
+            if isinstance(v, (int, float)):
+                regs[k] = int(v)
         print(f"[cli] Imported registers from {import_path}")
 
     for kv in (set_args or []):
