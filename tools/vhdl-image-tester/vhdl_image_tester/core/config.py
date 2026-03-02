@@ -64,7 +64,15 @@ SDK_CORE_YUV444_DIR: Path = SDK_FPGA / "core/yuv444_30b/rtl"
 # Program paths
 # ---------------------------------------------------------------------------
 
-PROGRAMS_ROOT: Path = REPO_ROOT / "programs"
+# ``LZX_VIT_PROGRAMS_DIR`` overrides the auto-detected programs directory.
+# Set this environment variable (or use the wrapper scripts in ``tools/``) to
+# point the tool at a custom programs directory without changing the working
+# directory.  Both GUI and CLI modes respect this setting.
+PROGRAMS_ROOT: Path = Path(
+    os.environ["LZX_VIT_PROGRAMS_DIR"]
+    if "LZX_VIT_PROGRAMS_DIR" in os.environ
+    else REPO_ROOT / "programs"
+)
 
 # ---------------------------------------------------------------------------
 # Test image paths

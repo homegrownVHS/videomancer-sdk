@@ -273,6 +273,47 @@ All GHDL working files and stimulus/output pixel data land in:
 ```
 
 Override the build directory with the `LZX_VIT_BUILD_DIR` environment variable.
+Override the programs directory with the `LZX_VIT_PROGRAMS_DIR` environment variable.
+
+| Variable | Default | Purpose |
+|---|---|---|
+| `LZX_VIT_BUILD_DIR` | `/tmp/lzx_vit` | GHDL working directory |
+| `LZX_VIT_PROGRAMS_DIR` | `<repo>/programs` | Programs source directory |
+
+---
+
+## Videomancer Firmware Repo — Wrapper Scripts
+
+When the SDK is used as a submodule inside the full Videomancer firmware
+repository, convenience wrappers live in `tools/` at the repo root. They set
+`LZX_VIT_PROGRAMS_DIR` to the firmware `programs/` directory automatically so
+you do not need to pass `--programs-dir` manually.
+
+**Linux / macOS:**
+
+```bash
+# From the Videomancer repo root:
+./tools/run-vhdl-tester.sh              # launch GUI
+./tools/run-vhdl-tester.sh --install    # first-time setup
+
+# CLI
+./tools/run-vhdl-tester.sh list
+./tools/run-vhdl-tester.sh simulate cascade --image docs/test_images/img.png --output out.png
+./tools/run-vhdl-tester.sh simulate cascade --set rotary_potentiometer_1=800 --image photo.png
+./tools/run-vhdl-tester.sh export-regs cascade --output cascade_regs.json
+```
+
+**Windows:**
+
+```bat
+rem From the Videomancer repo root:
+tools\run-vhdl-tester.bat
+tools\run-vhdl-tester.bat --install
+
+rem CLI
+tools\run-vhdl-tester.bat list
+tools\run-vhdl-tester.bat simulate cascade --image docs\test_images\img.png --output out.png
+```
 
 ---
 
