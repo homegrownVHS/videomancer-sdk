@@ -345,8 +345,17 @@ for PROGRAM in $PROGRAMS; do
         CORE="yuv444_27b"
     fi
 
+    # Get HD clock divisor (optional, defaults to 1 = full speed)
+    HD_CLK_DIV=$(parse_toml_field "$PROGRAM_TOML" "program.hd_clock_divisor")
+    if [ -z "$HD_CLK_DIV" ]; then
+        HD_CLK_DIV=1
+    fi
+
     echo -e "${CYAN}Supported hardware: ${HARDWARE_VARIANTS}${NC}"
     echo -e "${CYAN}Core architecture: ${CORE}${NC}"
+    if [ "$HD_CLK_DIV" -gt 1 ]; then
+        echo -e "${CYAN}HD clock divisor: ${HD_CLK_DIV}x (program clock = $(echo "scale=4; 74.25 / $HD_CLK_DIV" | bc) MHz)${NC}"
+    fi
     echo ""
 
     # Loop through each supported hardware variant
@@ -411,7 +420,7 @@ for PROGRAM in $PROGRAMS; do
 
         echo -e "${CYAN}  [1/6] HD Analog - Fmin: 74.25 MHz...${NC}"
         START=$(date +%s.%N)
-        if ! make VIDEOMANCER_SDK_ROOT="${VIDEOMANCER_SDK_ROOT}" PROJECT_ROOT="${PROJECT_ROOT}" BUILD_ROOT="${HW_BUILD_ROOT}" PROGRAM=$PROGRAM CONFIG=hd_analog DEVICE=$DEVICE PACKAGE=$PACKAGE FREQUENCY=74.25 HARDWARE=$HARDWARE CORE=$CORE PLATFORM=$PLATFORM > "$MAKE_LOG" 2>&1; then
+        if ! make VIDEOMANCER_SDK_ROOT="${VIDEOMANCER_SDK_ROOT}" PROJECT_ROOT="${PROJECT_ROOT}" BUILD_ROOT="${HW_BUILD_ROOT}" PROGRAM=$PROGRAM CONFIG=hd_analog DEVICE=$DEVICE PACKAGE=$PACKAGE FREQUENCY=74.25 HARDWARE=$HARDWARE CORE=$CORE PLATFORM=$PLATFORM HD_CLOCK_DIVISOR=$HD_CLK_DIV > "$MAKE_LOG" 2>&1; then
             echo -e "${RED}Build failed. Error output:${NC}"
             cat "$MAKE_LOG"
             rm -f "$MAKE_LOG"
@@ -465,7 +474,7 @@ for PROGRAM in $PROGRAMS; do
 
         echo -e "${CYAN}  [3/6] HD HDMI - Fmin: 74.25 MHz...${NC}"
         START=$(date +%s.%N)
-        if ! make VIDEOMANCER_SDK_ROOT="${VIDEOMANCER_SDK_ROOT}" PROJECT_ROOT="${PROJECT_ROOT}" BUILD_ROOT="${HW_BUILD_ROOT}" PROGRAM=$PROGRAM CONFIG=hd_hdmi DEVICE=$DEVICE PACKAGE=$PACKAGE FREQUENCY=74.25 HARDWARE=$HARDWARE CORE=$CORE PLATFORM=$PLATFORM > "$MAKE_LOG" 2>&1; then
+        if ! make VIDEOMANCER_SDK_ROOT="${VIDEOMANCER_SDK_ROOT}" PROJECT_ROOT="${PROJECT_ROOT}" BUILD_ROOT="${HW_BUILD_ROOT}" PROGRAM=$PROGRAM CONFIG=hd_hdmi DEVICE=$DEVICE PACKAGE=$PACKAGE FREQUENCY=74.25 HARDWARE=$HARDWARE CORE=$CORE PLATFORM=$PLATFORM HD_CLOCK_DIVISOR=$HD_CLK_DIV > "$MAKE_LOG" 2>&1; then
             echo -e "${RED}Build failed. Error output:${NC}"
             cat "$MAKE_LOG"
             rm -f "$MAKE_LOG"
@@ -519,7 +528,7 @@ for PROGRAM in $PROGRAMS; do
 
         echo -e "${CYAN}  [5/6] HD Dual - Fmin: 74.25 MHz...${NC}"
         START=$(date +%s.%N)
-        if ! make VIDEOMANCER_SDK_ROOT="${VIDEOMANCER_SDK_ROOT}" PROJECT_ROOT="${PROJECT_ROOT}" BUILD_ROOT="${HW_BUILD_ROOT}" PROGRAM=$PROGRAM CONFIG=hd_dual DEVICE=$DEVICE PACKAGE=$PACKAGE FREQUENCY=74.25 HARDWARE=$HARDWARE CORE=$CORE PLATFORM=$PLATFORM > "$MAKE_LOG" 2>&1; then
+        if ! make VIDEOMANCER_SDK_ROOT="${VIDEOMANCER_SDK_ROOT}" PROJECT_ROOT="${PROJECT_ROOT}" BUILD_ROOT="${HW_BUILD_ROOT}" PROGRAM=$PROGRAM CONFIG=hd_dual DEVICE=$DEVICE PACKAGE=$PACKAGE FREQUENCY=74.25 HARDWARE=$HARDWARE CORE=$CORE PLATFORM=$PLATFORM HD_CLOCK_DIVISOR=$HD_CLK_DIV > "$MAKE_LOG" 2>&1; then
             echo -e "${RED}Build failed. Error output:${NC}"
             cat "$MAKE_LOG"
             rm -f "$MAKE_LOG"

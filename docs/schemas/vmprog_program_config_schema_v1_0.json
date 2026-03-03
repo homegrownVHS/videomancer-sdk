@@ -188,6 +188,13 @@
             "yuv444_30b",
             "yuv422_20b"
           ]
+        },
+        "hd_clock_divisor": {
+          "type": "integer",
+          "description": "HD mode clock divisor for the program processing clock. 1 = full 74.25 MHz (default), 2 = half (37.125 MHz), 4 = quarter (18.5625 MHz). Uses an on-chip PLL to divide the pixel clock, producing pixel repetition in the horizontal dimension. Only affects HD video modes; SD modes always run at full clock speed. Optional: defaults to 1 if not specified.",
+          "enum": [1, 2, 4],
+          "default": 1,
+          "examples": [1, 2, 4]
         }
       },
       "additionalProperties": false,
