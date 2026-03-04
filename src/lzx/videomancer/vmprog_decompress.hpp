@@ -110,7 +110,12 @@ namespace lzx {
     /// The caller provides:
     ///   - A sliding window buffer (e.g., 1024 bytes for wbits=10)
     ///   - An output buffer for each decompress() call
-    ///   - Compressed input data via set_input()
+    ///   - Compressed input data via set_input() or a source_read_cb callback
+    ///
+    /// For streaming from a filesystem, use set_source_callback() to install
+    /// a refill callback that uzlib invokes when its input buffer is exhausted.
+    /// This avoids the limitation where a single decompress() call may consume
+    /// more compressed input than was provided via set_input().
     ///
     /// The decompressor maintains internal state across calls, allowing
     /// compressed data to be fed in arbitrarily-sized chunks.
@@ -135,6 +140,18 @@ namespace lzx {
             _total_in = 0;
             _total_out = 0;
             _finished = false;
+        }
+
+        /// @brief Install a source read callback for streaming input.
+        ///
+        /// When uzlib exhausts the current input buffer during decompression,
+        /// it calls this callback to obtain the next byte. The callback may
+        /// also update source/source_limit for buffered refill.
+        ///
+        /// @param cb Callback returning next byte (0-255) or -1 on true EOF
+        void set_source_callback(int (*cb)(struct uzlib_uncomp*)) noexcept
+        {
+            _decomp.source_read_cb = cb;
         }
 
         /// @brief Set the compressed input data buffer.
