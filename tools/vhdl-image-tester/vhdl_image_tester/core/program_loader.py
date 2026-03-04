@@ -64,8 +64,15 @@ class Parameter:
 
     @property
     def initial_toggle_state(self) -> bool:
-        """Resolved initial boolean state for toggle switches."""
+        """Resolved initial boolean state for toggle switches.
+
+        Compares ``initial_value_label`` against ``value_labels[0]``
+        (the OFF position) when both are available.  Falls back to a
+        string exclusion list when ``value_labels`` is not set.
+        """
         if self.initial_value_label:
+            if len(self.value_labels) >= 2:
+                return self.initial_value_label != self.value_labels[0]
             return self.initial_value_label.lower() not in ("off", "0", "false", "")
         return bool(self.initial_value > 511)
 

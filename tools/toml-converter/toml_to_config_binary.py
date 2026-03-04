@@ -13,7 +13,8 @@ Usage:
 
 Structure sizes (bytes):
     - vmprog_parameter_config_v1_0: 572 bytes
-    - vmprog_program_config_v1_0: 7372 bytes
+    - vmprog_preset_config_v1_0: 40 bytes
+    - vmprog_program_config_v1_0: 7712 bytes
 """
 
 import struct
@@ -48,7 +49,11 @@ CATEGORY_MAX_LENGTH = 32
 DESCRIPTION_MAX_LENGTH = 128
 URL_MAX_LENGTH = 128
 NUM_PARAMETERS = 12
-CONFIG_STRUCT_SIZE = 7372
+MAX_PRESETS = 8
+PRESET_NAME_MAX_LENGTH = 16
+PRESET_NUM_VALUES = 12
+PRESET_STRUCT_SIZE = 40
+CONFIG_STRUCT_SIZE = 7712
 
 # Enum value bounds
 MAX_PARAMETER_ID = 12  # linear_potentiometer_12
@@ -457,6 +462,80 @@ def pack_empty_parameter() -> bytes:
     return b'\x00' * PARAM_STRUCT_SIZE
 
 
+def pack_preset(preset_dict: Dict[str, Any], parameters: list) -> bytes:
+    """
+    Pack a single preset configuration into binary format.
+
+    Structure layout (40 bytes):
+        - name: char[16] (16 bytes, null-padded)
+        - values: uint16_t[12] (24 bytes, one per parameter slot)
+
+    Parameters not listed in the preset inherit their initial_value from
+    the corresponding [[parameter]] definition. For toggle parameters that
+    use value_labels / initial_value_label, the converter resolves the label
+    index through the boolean control curve (0 for Off, 1023 for On). If no
+    [[parameter]] defines that slot, 512 is used.
+
+    Args:
+        preset_dict: Dictionary containing preset configuration from TOML
+        parameters: List of parameter configuration dicts for defaults
+
+    Returns:
+        40 bytes of packed binary data
+
+    Raises:
+        ValueError: If preset name is too long or values are out of range
+    """
+    name = preset_dict.get('name', '')
+    if len(name.encode('utf-8')) > 15:
+        raise ValueError(f"Preset name '{name}' exceeds 15 characters")
+
+    # Build initial_value lookup from parameter definitions.
+    # For toggle/label parameters, resolve initial_value_label through the
+    # boolean control curve: label index 0 -> 0, label index 1 -> 1023.
+    defaults = {}
+    for param in parameters:
+        pid = param.get('parameter_id', 'none')
+        if isinstance(pid, str) and pid in PARAMETER_ID_MAP and PARAMETER_ID_MAP[pid] >= 1:
+            idx = PARAMETER_ID_MAP[pid] - 1  # 1-indexed enum -> 0-indexed array
+            value_labels = param.get('value_labels', [])
+            if value_labels:
+                if 'initial_value_label' in param:
+                    label_index = value_labels.index(param['initial_value_label'])
+                else:
+                    label_index = 0
+                if len(value_labels) == 2:
+                    defaults[idx] = 1023 if label_index >= 1 else 0
+                else:
+                    defaults[idx] = round(label_index * 1023 / max(len(value_labels) - 1, 1))
+            else:
+                defaults[idx] = param.get('initial_value', 512)
+
+    # Start with defaults for all 12 parameter slots
+    values = [defaults.get(i, 512) for i in range(12)]
+
+    # Override with explicit preset values
+    for key, raw_value in preset_dict.items():
+        if key == 'name':
+            continue
+        param_enum = PARAMETER_ID_MAP.get(key)
+        if param_enum is None or param_enum < 1:
+            raise ValueError(f"Unknown preset parameter_id: {key}")
+        array_index = param_enum - 1
+        if not (0 <= raw_value <= 1023):
+            raise ValueError(f"Preset value {raw_value} for {key} out of range 0-1023")
+        values[array_index] = raw_value
+
+    # Pack: 16-byte name (null-padded) + 12 x uint16_t LE
+    name_bytes = name.encode('utf-8')[:15].ljust(16, b'\x00')
+    data = bytearray(name_bytes)
+    for v in values:
+        data += struct.pack('<H', v)
+
+    assert len(data) == PRESET_STRUCT_SIZE, f"Preset size mismatch: {len(data)} != {PRESET_STRUCT_SIZE}"
+    return bytes(data)
+
+
 def validate_program_config(config: Dict[str, Any]) -> None:
     """
     Validate a program configuration.
@@ -563,12 +642,33 @@ def validate_program_config(config: Dict[str, Any]) -> None:
     for i, param in enumerate(parameters):
         validate_parameter_config(param, i)
 
+    # Validate presets
+    presets = config.get('preset', [])
+    if len(presets) > MAX_PRESETS:
+        raise ValueError(f"Too many presets ({len(presets)}, maximum: {MAX_PRESETS})")
+
+    for i, preset in enumerate(presets):
+        if 'name' not in preset or not preset['name']:
+            raise ValueError(f"Preset {i}: missing or empty 'name' field")
+        name = preset['name']
+        if len(name.encode('utf-8')) > 15:
+            raise ValueError(f"Preset {i}: name '{name}' exceeds 15 characters")
+        for key, value in preset.items():
+            if key == 'name':
+                continue
+            if key not in PARAMETER_ID_MAP:
+                raise ValueError(f"Preset {i}: unknown parameter_id '{key}'")
+            if PARAMETER_ID_MAP[key] < 1:
+                raise ValueError(f"Preset {i}: parameter_id '{key}' is not a valid control")
+            if not isinstance(value, int) or not (0 <= value <= 1023):
+                raise ValueError(f"Preset {i}: value for '{key}' must be integer 0-1023")
+
 
 def pack_program_config(config: Dict[str, Any]) -> bytes:
     """
     Pack a complete program configuration into binary format.
 
-    Structure layout (7372 bytes):
+    Structure layout (7712 bytes):
         - program_id: char[64] (64 bytes)
         - program_version_major: uint16_t (2 bytes)
         - program_version_minor: uint16_t (2 bytes)
@@ -585,9 +685,11 @@ def pack_program_config(config: Dict[str, Any]) -> bytes:
         - description: char[128] (128 bytes)
         - url: char[128] (128 bytes)
         - parameter_count: uint16_t (2 bytes)
-        - reserved_pad: uint16_t (2 bytes)
+        - preset_count: uint8_t (1 byte)
+        - reserved_pad: uint8_t (1 byte)
         - parameters: vmprog_parameter_config_v1_0[12] (6864 bytes)
-        - reserved: uint8_t[2] (2 bytes)
+        - presets: vmprog_preset_config_v1_0[8] (320 bytes)
+        - reserved: uint8_t[22] (22 bytes)
 
     Args:
         config: Dictionary containing program configuration from TOML
@@ -668,11 +770,14 @@ def pack_program_config(config: Dict[str, Any]) -> bytes:
     # URL field (128 bytes)
     data += pack_string(program.get('url', ''), URL_MAX_LENGTH)
 
-    # Parameter count and padding (4 bytes) - auto-calculated from array
+    # Parameter count, preset count, and padding (4 bytes)
     parameters = config.get('parameter', [])
     parameter_count = min(len(parameters), NUM_PARAMETERS)
+    presets = config.get('preset', [])
+    preset_count = min(len(presets), MAX_PRESETS)
     data += struct.pack('<H', parameter_count)
-    data += struct.pack('<H', 0)  # reserved_pad
+    data += struct.pack('<B', preset_count)  # preset_count (uint8_t)
+    data += struct.pack('<B', 0)  # reserved_pad (uint8_t)
 
     # Pack parameter array (6864 bytes = 12 * 572)
     for i in range(NUM_PARAMETERS):
@@ -681,8 +786,15 @@ def pack_program_config(config: Dict[str, Any]) -> bytes:
         else:
             data += pack_empty_parameter()
 
-    # Reserved (2 bytes)
-    data += b'\x00' * 2
+    # Pack preset array (320 bytes = 8 * 40)
+    for i in range(MAX_PRESETS):
+        if i < len(presets):
+            data += pack_preset(presets[i], parameters)
+        else:
+            data += b'\x00' * PRESET_STRUCT_SIZE
+
+    # Reserved (22 bytes)
+    data += b'\x00' * 22
 
     assert len(data) == CONFIG_STRUCT_SIZE, f"Config size mismatch: {len(data)} != {CONFIG_STRUCT_SIZE}"
     return bytes(data)
@@ -753,7 +865,9 @@ def convert_toml_to_binary(toml_path: Path, output_path: Path) -> None:
         print(f"  Version: {version_str}")
         print(f"  Hardware: {hw_str}")
         print(f"  Core: {core_str}")
+        preset_count = len(config.get('preset', []))
         print(f"  Parameters: {param_count}/{NUM_PARAMETERS}")
+        print(f"  Presets: {preset_count}/{MAX_PRESETS}")
         print(f"  Binary size: {len(binary_data)} bytes")
 
 

@@ -60,7 +60,10 @@ def _load_registers(
     """Build a register dict from *program* defaults, then apply overrides."""
     regs: dict[str, int] = {}
     for param in program.parameters:
-        regs[param.parameter_id] = param.initial_value
+        if param.is_toggle:
+            regs[param.parameter_id] = 1 if param.initial_toggle_state else 0
+        else:
+            regs[param.parameter_id] = param.initial_value
 
     if import_path:
         data = json.loads(Path(import_path).read_text())
@@ -151,7 +154,12 @@ def _cmd_export_regs(args: argparse.Namespace) -> int:
         print(f"[cli] ERROR: {exc}", file=sys.stderr)
         return 1
 
-    regs: dict[str, int] = {p.parameter_id: p.initial_value for p in prog.parameters}
+    regs: dict[str, int] = {}
+    for p in prog.parameters:
+        if p.is_toggle:
+            regs[p.parameter_id] = 1 if p.initial_toggle_state else 0
+        else:
+            regs[p.parameter_id] = p.initial_value
 
     output = args.output or f"{args.name}_registers.json"
     Path(output).write_text(json.dumps(regs, indent=2))

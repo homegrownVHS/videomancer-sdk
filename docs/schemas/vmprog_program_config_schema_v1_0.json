@@ -595,6 +595,99 @@
           }
         ]
       }
+    },
+    "preset": {
+      "type": "array",
+      "description": "Factory preset definitions (maximum 8). Each preset stores a name and parameter values.",
+      "minItems": 0,
+      "maxItems": 8,
+      "items": {
+        "type": "object",
+        "description": "Individual preset configuration (vmprog_preset_config_v1_0)",
+        "required": [
+          "name"
+        ],
+        "properties": {
+          "name": {
+            "type": "string",
+            "maxLength": 15,
+            "description": "Preset display name (max 15 characters)"
+          },
+          "rotary_potentiometer_1": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 1023,
+            "description": "Value for rotary potentiometer 1"
+          },
+          "rotary_potentiometer_2": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 1023,
+            "description": "Value for rotary potentiometer 2"
+          },
+          "rotary_potentiometer_3": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 1023,
+            "description": "Value for rotary potentiometer 3"
+          },
+          "rotary_potentiometer_4": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 1023,
+            "description": "Value for rotary potentiometer 4"
+          },
+          "rotary_potentiometer_5": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 1023,
+            "description": "Value for rotary potentiometer 5"
+          },
+          "rotary_potentiometer_6": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 1023,
+            "description": "Value for rotary potentiometer 6"
+          },
+          "toggle_switch_7": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 1023,
+            "description": "Value for toggle switch 7"
+          },
+          "toggle_switch_8": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 1023,
+            "description": "Value for toggle switch 8"
+          },
+          "toggle_switch_9": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 1023,
+            "description": "Value for toggle switch 9"
+          },
+          "toggle_switch_10": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 1023,
+            "description": "Value for toggle switch 10"
+          },
+          "toggle_switch_11": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 1023,
+            "description": "Value for toggle switch 11"
+          },
+          "linear_potentiometer_12": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 1023,
+            "description": "Value for linear potentiometer 12"
+          }
+        },
+        "additionalProperties": false
+      }
     }
   },
   "additionalProperties": false,

@@ -370,6 +370,29 @@ namespace lzx {
 #pragma pack(pop)
 
 #pragma pack(push, 1)
+    /// @brief Factory preset definition within a program config.
+    /// @details Each preset stores a name (≤15 chars + null) and 12 raw
+    ///          uint16_t values, one per parameter slot (0-indexed).
+    ///          When applied, these set modulator_state.manual and all
+    ///          modulation is disabled (time/space/slope → 512, source → 0).
+    struct vmprog_preset_config_v1_0
+    {
+        static constexpr uint32_t name_max_length = 16;
+        static constexpr uint32_t num_values = 12;
+        static constexpr uint32_t struct_size = 40;
+
+        char     name[name_max_length];   // Null-terminated preset name (≤15 chars)
+        uint16_t values[num_values];      // Raw manual parameter values (0–1023), 0-indexed
+
+        vmprog_preset_config_v1_0() noexcept
+        {
+            for (size_t i = 0; i < name_max_length; ++i) name[i] = '\0';
+            for (size_t i = 0; i < num_values; ++i) values[i] = 0;
+        }
+    };
+#pragma pack(pop)
+
+#pragma pack(push, 1)
     struct vmprog_program_config_v1_0
     {
         static constexpr uint32_t program_id_max_length = 64;
@@ -380,7 +403,8 @@ namespace lzx {
         static constexpr uint32_t description_max_length = 128;
         static constexpr uint32_t url_max_length = 128;
         static constexpr uint32_t num_parameters = 12;
-        static constexpr uint32_t struct_size = 7372;
+        static constexpr uint32_t max_presets = 8;
+        static constexpr uint32_t struct_size = 7712;
 
         // All string fields must be null-terminated
         char program_id[program_id_max_length];      // Unique program identifier
@@ -400,9 +424,11 @@ namespace lzx {
         char description[description_max_length];
         char url[url_max_length];
         uint16_t parameter_count;  // Number of valid parameters (0 to num_parameters)
-        uint16_t reserved_pad;  // Padding
+        uint8_t  preset_count;     // Number of valid factory presets (0 to max_presets)
+        uint8_t  reserved_pad;     // Padding byte
         vmprog_parameter_config_v1_0 parameters[num_parameters];
-        uint8_t reserved[2];  // Padding to 32-bit boundary
+        vmprog_preset_config_v1_0 presets[max_presets];  // Factory preset definitions
+        uint8_t reserved[22];  // Padding to 7712 total
     };
 
 #pragma pack(pop)
@@ -421,6 +447,9 @@ namespace lzx {
 
     static_assert(sizeof(vmprog_parameter_config_v1_0) == vmprog_parameter_config_v1_0::struct_size,
         "vmprog_parameter_config_v1_0 size mismatch - check struct packing and alignment");
+
+    static_assert(sizeof(vmprog_preset_config_v1_0) == vmprog_preset_config_v1_0::struct_size,
+        "vmprog_preset_config_v1_0 size mismatch - check struct packing and alignment");
 
     static_assert(sizeof(vmprog_program_config_v1_0) == vmprog_program_config_v1_0::struct_size,
         "vmprog_program_config_v1_0 size mismatch - check struct packing and alignment");
@@ -542,9 +571,10 @@ namespace lzx {
         vmprog_program_config_v1_0::category_max_length +     // 32
         vmprog_program_config_v1_0::description_max_length +  // 128
         vmprog_program_config_v1_0::url_max_length +          // 128
-        2 +                                                   // 2 (parameter_count + reserved_pad)
+        2 +                                                   // 2 (parameter_count + preset_count + reserved_pad)
         sizeof(vmprog_parameter_config_v1_0) * vmprog_program_config_v1_0::num_parameters + // 6864
-        2,  // reserved padding
+        sizeof(vmprog_preset_config_v1_0) * vmprog_program_config_v1_0::max_presets +       // 320
+        22,  // reserved padding
         "vmprog_program_config_v1_0::struct_size calculation mismatch");
 
     static_assert(vmprog_signed_descriptor_v1_0::struct_size ==
@@ -695,6 +725,16 @@ namespace lzx {
         }
 
         return true;
+    }
+
+    /**
+     * @brief Get preset name as a C string (guaranteed null-terminated in valid configs).
+     *
+     * @param preset Preset configuration
+     * @return Pointer to the preset's name string
+     */
+    inline const char* get_preset_name(const vmprog_preset_config_v1_0& preset) {
+        return preset.name;
     }
 
     // =============================================================================
@@ -1052,8 +1092,39 @@ namespace lzx {
         }
 
         // Verify reserved fields are zeroed
-        if (config.reserved_pad != 0 || config.reserved[0] != 0 || config.reserved[1] != 0) {
+        if (config.reserved_pad != 0) {
             return vmprog_validation_result::reserved_field_not_zero;
+        }
+        for (size_t i = 0; i < sizeof(config.reserved); ++i) {
+            if (config.reserved[i] != 0) {
+                return vmprog_validation_result::reserved_field_not_zero;
+            }
+        }
+
+        // Validate preset_count range
+        if (config.preset_count > vmprog_program_config_v1_0::max_presets) {
+            return vmprog_validation_result::invalid_parameter_count;
+        }
+
+        // Validate each preset
+        for (uint32_t i = 0; i < config.preset_count; ++i) {
+            if (!is_string_terminated(config.presets[i].name,
+                                      sizeof(config.presets[i].name))) {
+                return vmprog_validation_result::string_not_terminated;
+            }
+        }
+
+        // Unused preset slots must be zeroed
+        for (uint32_t i = config.preset_count; i < vmprog_program_config_v1_0::max_presets; ++i) {
+            const auto& p = config.presets[i];
+            bool all_zero = true;
+            for (size_t j = 0; j < sizeof(p.name) && all_zero; ++j)
+                all_zero = (p.name[j] == '\0');
+            for (size_t j = 0; j < vmprog_preset_config_v1_0::num_values && all_zero; ++j)
+                all_zero = (p.values[j] == 0);
+            if (!all_zero) {
+                return vmprog_validation_result::reserved_field_not_zero;
+            }
         }
 
         // Validate each parameter
@@ -1088,8 +1159,10 @@ namespace lzx {
 
         // Zero out all reserved fields for deterministic hashing
         // The main reserved field is at the end
-        config_copy.reserved[0] = 0;
-        config_copy.reserved[1] = 0;
+        for (size_t i = 0; i < sizeof(config_copy.reserved); ++i) {
+            config_copy.reserved[i] = 0;
+        }
+        config_copy.reserved_pad = 0;
 
         // Zero reserved fields in used parameters only (for consistency with validation)
         for (uint32_t i = 0; i < config.parameter_count && i < vmprog_program_config_v1_0::num_parameters; ++i) {
@@ -1425,6 +1498,7 @@ namespace lzx {
         config.hw_mask = vmprog_hardware_flags_v1_0::rev_a;
         config.core_id = vmprog_core_id_v1_0::yuv444_30b;
         config.parameter_count = 0;
+        config.preset_count = 0;
     }
 
     /**
