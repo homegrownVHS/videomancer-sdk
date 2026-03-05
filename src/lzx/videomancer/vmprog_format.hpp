@@ -560,10 +560,13 @@ namespace lzx {
     static_assert(offsetof(vmprog_program_config_v1_0, program_version_major) == 64,
         "vmprog_program_config_v1_0::program_version_major must be at offset 64");
 
+    static_assert(offsetof(vmprog_program_config_v1_0, supported_timings) == 7690,
+        "vmprog_program_config_v1_0::supported_timings must be at offset 7690 (binary format compat)");
+
     // Calculated size validations - verify struct size calculations are correct
     static_assert(vmprog_program_config_v1_0::struct_size ==
         vmprog_program_config_v1_0::program_id_max_length +  // 64
-        sizeof(uint16_t) * 8 +                               // 16 (8 uint16_t fields)
+        sizeof(uint16_t) * 7 +                               // 14 (7 uint16_t version/ABI fields)
         sizeof(vmprog_hardware_flags_v1_0) +                 // 4
         sizeof(vmprog_core_id_v1_0) +                        // 4
         vmprog_program_config_v1_0::program_name_max_length + // 32
@@ -572,7 +575,7 @@ namespace lzx {
         vmprog_program_config_v1_0::category_max_length +     // 32
         vmprog_program_config_v1_0::description_max_length +  // 128
         vmprog_program_config_v1_0::url_max_length +          // 128
-        2 +                                                   // 2 (parameter_count + preset_count + reserved_pad)
+        4 +                                                   // 4 (parameter_count:2 + preset_count:1 + reserved_pad:1)
         sizeof(vmprog_parameter_config_v1_0) * vmprog_program_config_v1_0::num_parameters + // 6864
         sizeof(vmprog_preset_config_v1_0) * vmprog_program_config_v1_0::max_presets +       // 320
         sizeof(uint16_t) +                                                                   // 2 (supported_timings)
