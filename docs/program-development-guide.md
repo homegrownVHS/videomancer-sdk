@@ -26,7 +26,7 @@ All Videomancer programs implement the same `program_yuv444` entity interface:
 entity program_yuv444 is
     port (
         clk             : in std_logic;                    -- System clock (74.25 MHz)
-        registers_in    : in t_spi_ram;                    -- 8 registers × 10 bits
+        registers_in    : in t_spi_ram;                    -- Control registers via SPI
         data_in         : in t_video_stream_yuv444;        -- Input video stream
         data_out        : out t_video_stream_yuv444        -- Output video stream
     );
@@ -35,7 +35,7 @@ end entity program_yuv444;
 
 **Key Points:**
 - **Clock**: 74.25 MHz pixel clock (for HD) or 13.5MHz pixel clock (for SD)
-- **Registers**: 8 control registers (0-7) for parameters
+- **Registers**: Control registers 0-7 for parameters, register 8 for video timing ID
 - **Video Format**: YUV 4:4:4, 10-bit per channel (0-1023)
 - **Sync Signals**: hsync_n, vsync_n, field_n, avid (active video flag)
 
@@ -129,9 +129,53 @@ end architecture;
 **Register Mapping:**
 ```vhdl
 -- Extract control values from registers_in array
-s_param1 <= unsigned(registers_in(0));  -- Register 0
+-- Registers 0-7: parameter controls (10-bit, 0-1023)
+s_param1 <= unsigned(registers_in(0));  -- Register 0: rotary_potentiometer_1
 s_enable <= registers_in(1)(0);         -- Register 1, bit 0
+
+-- Register 8: video timing ID (4-bit, in bits [3:0])
+s_timing_id <= registers_in(8)(3 downto 0);
 ```
+
+**Timing-Aware Programming:**
+
+The firmware writes the active video timing ID to `registers_in(8)(3 downto 0)` at program load and whenever the video standard changes. Programs can compare this value against the constants defined in `video_timing_pkg.vhd` to adapt their processing.
+
+```vhdl
+library work;
+use work.video_timing_pkg.all;
+
+-- In your architecture:
+signal s_timing_id : std_logic_vector(3 downto 0);
+signal s_is_sd     : std_logic;
+
+-- Extract timing ID from register 8
+s_timing_id <= registers_in(8)(3 downto 0);
+
+-- Example: detect SD modes (NTSC, PAL, 480p, 576p)
+s_is_sd <= '1' when s_timing_id = C_NTSC
+                  or s_timing_id = C_PAL
+                  or s_timing_id = C_480P
+                  or s_timing_id = C_576P
+           else '0';
+
+-- Example: look up frame dimensions from video_sync_pkg
+use work.video_sync_pkg.all;
+signal s_frame_width  : unsigned(15 downto 0);
+signal s_frame_height : unsigned(15 downto 0);
+
+s_frame_width  <= C_VIDEO_SYNC_CONFIG_ARRAY(
+    to_integer(unsigned(s_timing_id))).frame_width;
+s_frame_height <= C_VIDEO_SYNC_CONFIG_ARRAY(
+    to_integer(unsigned(s_timing_id))).frame_height;
+```
+
+See [ABI Format — Video Timing ID](abi-format.md#video-timing-id-0x08) for the complete table of timing ID values and frame dimensions.
+
+> **Note**: Most programs do not need timing awareness — they process pixels
+> identically regardless of resolution. Use `registers_in(8)` only when your
+> algorithm needs to scale delay depths, buffer sizes, or spatial parameters
+> relative to the frame dimensions.
 
 **Pipeline Implementation:**
 ```vhdl

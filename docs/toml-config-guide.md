@@ -50,6 +50,65 @@ label = "On"
 - `core` - Core architecture: "yuv444_30b" (default) or "yuv422_20b"
 - `author`, `license`, `category` (max 31-63 chars)
 - `description`, `url` (max 127 chars)
+- `supported_timings` - Array of video timing IDs the program supports (see below)
+
+### Supported Timings
+
+The optional `supported_timings` field declares which video timing modes the
+program is compatible with. When omitted, the program is assumed to work with
+all 15 timing modes (the default for most programs).
+
+```toml
+[program]
+# ... required fields ...
+supported_timings = ["ntsc", "pal", "480p", "576p"]
+```
+
+The firmware checks this field before loading a program. If the currently
+active video standard is not in the program's supported list, the firmware
+will reject the load with a `timing_not_supported` error.
+
+**Available timing names:**
+
+| Name | Standard | Resolution | Frame Rate | Type |
+|------|----------|------------|------------|------|
+| `ntsc` | NTSC | 720×486 | 59.94 Hz | SD interlaced |
+| `pal` | PAL | 720×576 | 50 Hz | SD interlaced |
+| `480p` | 480p | 720×480 | 59.94 Hz | SD progressive |
+| `576p` | 576p | 720×576 | 50 Hz | SD progressive |
+| `720p50` | 720p | 1280×720 | 50 Hz | HD progressive |
+| `720p5994` | 720p | 1280×720 | 59.94 Hz | HD progressive |
+| `720p60` | 720p | 1280×720 | 60 Hz | HD progressive |
+| `1080i50` | 1080i | 1920×1080 | 50 Hz | HD interlaced |
+| `1080i5994` | 1080i | 1920×1080 | 59.94 Hz | HD interlaced |
+| `1080i60` | 1080i | 1920×1080 | 60 Hz | HD interlaced |
+| `1080p2398` | 1080p | 1920×1080 | 23.98 Hz | HD progressive |
+| `1080p24` | 1080p | 1920×1080 | 24 Hz | HD progressive |
+| `1080p25` | 1080p | 1920×1080 | 25 Hz | HD progressive |
+| `1080p2997` | 1080p | 1920×1080 | 29.97 Hz | HD progressive |
+| `1080p30` | 1080p | 1920×1080 | 30 Hz | HD progressive |
+
+**Common patterns:**
+
+```toml
+# SD-only program (e.g., uses BRAM-based delay that fits only SD line widths)
+supported_timings = ["ntsc", "pal", "480p", "576p"]
+
+# HD-only program
+supported_timings = [
+    "720p50", "720p5994", "720p60",
+    "1080i50", "1080i5994", "1080i60",
+    "1080p2398", "1080p24", "1080p25", "1080p2997", "1080p30"
+]
+
+# Omit field entirely for programs that work at any resolution (most programs)
+# supported_timings = [...]  -- not needed
+```
+
+**Validation rules:**
+- Each entry must be one of the 15 valid timing names listed above
+- No duplicates allowed
+- An empty array `[]` is treated the same as omitting the field (all timings supported)
 
 **Hardware Platforms:**
 - `rev_a` - Videomancer Core Rev A hardware

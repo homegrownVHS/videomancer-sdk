@@ -99,5 +99,96 @@ namespace videomancer_abi_v1_0
         }
     }
 
+    // =========================================================================
+    //  Video Timing Configuration Constants
+    // =========================================================================
+    //
+    //  These constants mirror the VHDL C_VIDEO_SYNC_CONFIG_ARRAY defined in
+    //  fpga/common/rtl/video_sync/video_sync_pkg.vhd. They provide the key
+    //  frame parameters for each video timing mode so that firmware and tools
+    //  can reason about video dimensions without parsing VHDL.
+    //
+    //  Programs running on the FPGA can read the current timing ID from
+    //  registers_in(8)(3 downto 0) and use the video_timing_pkg.vhd constants
+    //  directly in VHDL. These C++ constants serve the same purpose for the
+    //  firmware and SDK tool side.
+    //
+    //  VHDL cross-references:
+    //    - fpga/common/rtl/video_timing/video_timing_pkg.vhd  (timing ID constants)
+    //    - fpga/common/rtl/video_sync/video_sync_pkg.vhd      (C_VIDEO_SYNC_CONFIG_ARRAY)
+    //    - fpga/core/yuv444_30b/rtl/core_top.vhd              (register 8 extraction)
+    // =========================================================================
+
+    /// @brief Key frame parameters for a single video timing mode.
+    /// @details Subset of the VHDL t_video_sync_config record, containing
+    ///          only the fields relevant to program development and firmware
+    ///          parameter scaling.
+    struct video_timing_config
+    {
+        uint16_t frame_width;      ///< Active pixels per line
+        uint16_t frame_height;     ///< Active lines per frame (both fields if interlaced)
+        uint16_t clocks_per_line;  ///< Total pixel clocks per line (including blanking)
+        uint16_t lines_per_frame;  ///< Total lines per frame (including blanking)
+        bool     is_interlaced;    ///< True if interlaced (two fields per frame)
+        bool     is_sd;            ///< True if standard-definition (13.5 MHz pixel clock)
+    };
+
+    /// @brief SPI register index that carries the video timing ID.
+    /// @details Programs read this via registers_in(8)(3 downto 0) in VHDL.
+    ///          The firmware writes it via SPI register address 0x08.
+    constexpr uint8_t timing_id_register_index = 8;
+
+    /// @brief Bit mask to extract the 4-bit timing ID from a 10-bit register value.
+    constexpr uint16_t timing_id_mask = 0x000F;
+
+    /// @brief Total number of entries in the timing configuration table (including reserved).
+    constexpr uint8_t video_timing_config_count = 16;
+
+    /// @brief Compile-time lookup table of video timing configurations.
+    /// @details Indexed by the raw 4-bit timing ID value (0-15).
+    ///          Entry 15 is reserved (all zeros).
+    ///          Matches C_VIDEO_SYNC_CONFIG_ARRAY in video_sync_pkg.vhd.
+    constexpr video_timing_config video_timing_configs[16] = {
+        // Index 0: C_NTSC — 480i 59.94 Hz
+        { 720, 486, 858, 525, true, true },
+        // Index 1: C_1080I50 — 1080i 50 Hz
+        { 1920, 1080, 2640, 1125, true, false },
+        // Index 2: C_1080I5994 — 1080i 59.94 Hz
+        { 1920, 1080, 2200, 1125, true, false },
+        // Index 3: C_1080P24 — 1080p 24 Hz
+        { 1920, 1080, 2750, 1125, false, false },
+        // Index 4: C_480P — 480p 59.94 Hz
+        { 720, 480, 858, 525, false, true },
+        // Index 5: C_720P50 — 720p 50 Hz
+        { 1280, 720, 1980, 750, false, false },
+        // Index 6: C_720P5994 — 720p 59.94 Hz
+        { 1280, 720, 1650, 750, false, false },
+        // Index 7: C_1080P30 — 1080p 30 Hz
+        { 1920, 1080, 2200, 1125, false, false },
+        // Index 8: C_PAL — 576i 50 Hz
+        { 720, 576, 864, 625, true, true },
+        // Index 9: C_1080P2398 — 1080p 23.98 Hz
+        { 1920, 1080, 2750, 1125, false, false },
+        // Index 10: C_1080I60 — 1080i 60 Hz
+        { 1920, 1080, 2200, 1125, true, false },
+        // Index 11: C_1080P25 — 1080p 25 Hz
+        { 1920, 1080, 2640, 1125, false, false },
+        // Index 12: C_576P — 576p 50 Hz
+        { 720, 576, 864, 625, false, true },
+        // Index 13: C_1080P2997 — 1080p 29.97 Hz
+        { 1920, 1080, 2200, 1125, false, false },
+        // Index 14: C_720P60 — 720p 60 Hz
+        { 1280, 720, 1650, 750, false, false },
+        // Index 15: Reserved
+        { 0, 0, 0, 0, false, false },
+    };
+
+    /// @brief Look up the video timing configuration for a timing ID.
+    /// @param id A video_timing_id enum value.
+    /// @return Reference to the corresponding video_timing_config entry.
+    inline constexpr const video_timing_config& get_timing_config(video_timing_id id) {
+        return video_timing_configs[static_cast<uint8_t>(id) & 0x0F];
+    }
+
 } // namespace videomancer_abi_v1_0
 } // namespace lzx

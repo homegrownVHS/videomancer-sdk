@@ -95,8 +95,47 @@ Bits [9:5] are reserved and should be written as 0.
 
 #### Video Timing ID (0x08)
 
-**Format:** 4-bit unsigned integer
-**Range:** 0-15 (0x0-0xF)
+**Format:** 4-bit unsigned integer in bits [3:0]
+**Range:** 0-14 valid, 15 reserved
+
+The firmware writes the current video timing mode to register 0x08 once at
+program load time, and again whenever the video standard changes. Programs
+can read `registers_in(8)(3 downto 0)` to adapt processing to the active
+video format.
+
+**Timing ID Values:**
+
+| ID (hex) | ID (binary) | VHDL Constant | Standard | Frame W×H | Clocks/Line | Lines/Frame | Interlaced | Clock |
+|----------|-------------|---------------|----------|-----------|-------------|-------------|------------|-------|
+| 0x0 | `0000` | `C_NTSC`       | 480i 59.94 Hz  | 720×486   | 858  | 525  | Yes | 13.5 MHz  |
+| 0x1 | `0001` | `C_1080I50`    | 1080i 50 Hz    | 1920×1080 | 2640 | 1125 | Yes | 74.25 MHz |
+| 0x2 | `0010` | `C_1080I5994`  | 1080i 59.94 Hz | 1920×1080 | 2200 | 1125 | Yes | 74.25 MHz |
+| 0x3 | `0011` | `C_1080P24`    | 1080p 24 Hz    | 1920×1080 | 2750 | 1125 | No  | 74.25 MHz |
+| 0x4 | `0100` | `C_480P`       | 480p 59.94 Hz  | 720×480   | 858  | 525  | No  | 27 MHz    |
+| 0x5 | `0101` | `C_720P50`     | 720p 50 Hz     | 1280×720  | 1980 | 750  | No  | 74.25 MHz |
+| 0x6 | `0110` | `C_720P5994`   | 720p 59.94 Hz  | 1280×720  | 1650 | 750  | No  | 74.25 MHz |
+| 0x7 | `0111` | `C_1080P30`    | 1080p 30 Hz    | 1920×1080 | 2200 | 1125 | No  | 74.25 MHz |
+| 0x8 | `1000` | `C_PAL`        | 576i 50 Hz     | 720×576   | 864  | 625  | Yes | 13.5 MHz  |
+| 0x9 | `1001` | `C_1080P2398`  | 1080p 23.98 Hz | 1920×1080 | 2750 | 1125 | No  | 74.25 MHz |
+| 0xA | `1010` | `C_1080I60`    | 1080i 60 Hz    | 1920×1080 | 2200 | 1125 | Yes | 74.25 MHz |
+| 0xB | `1011` | `C_1080P25`    | 1080p 25 Hz    | 1920×1080 | 2640 | 1125 | No  | 74.25 MHz |
+| 0xC | `1100` | `C_576P`       | 576p 50 Hz     | 720×576   | 864  | 625  | No  | 27 MHz    |
+| 0xD | `1101` | `C_1080P2997`  | 1080p 29.97 Hz | 1920×1080 | 2200 | 1125 | No  | 74.25 MHz |
+| 0xE | `1110` | `C_720P60`     | 720p 60 Hz     | 1280×720  | 1650 | 750  | No  | 74.25 MHz |
+| 0xF | `1111` | _(reserved)_   | —              | —         | —    | —    | —   | —         |
+
+**SD vs HD classification:**
+- **SD modes** (13.5 MHz pixel clock): NTSC (0x0), 480p (0x4), PAL (0x8), 576p (0xC)
+- **HD modes** (74.25 MHz pixel clock): All others (0x1-0x3, 0x5-0x7, 0x9-0xE)
+
+SD modes run at 13.5 MHz or 27 MHz (480p/576p are double-rate SD). HD modes
+run at 74.25 MHz. The FPGA core applies a clock decimation factor for SD
+configs so that programs always see one pixel per clock.
+
+**VHDL references:**
+- Timing ID constants: `fpga/common/rtl/video_timing/video_timing_pkg.vhd`
+- Full sync parameters: `fpga/common/rtl/video_sync/video_sync_pkg.vhd` (`C_VIDEO_SYNC_CONFIG_ARRAY`)
+- C++ mirror: `videomancer_abi.hpp` (`video_timing_configs[]`)
 
 ### Register Summary
 
@@ -107,7 +146,9 @@ Bits [9:5] are reserved and should be written as 0.
 | 0x07 | `linear_potentiometer_12` | 10-bit value (0-1023) |
 | 0x08 | `video_timing_id` | Bits [3:0], timing mode 0-15 |
 
-Video timing modes defined in `fpga/common/rtl/video_timing/video_timing_pkg.vhd`.
+Video timing modes are enumerated in the [Video Timing ID table](#video-timing-id-0x08) above.
+Constants defined in `fpga/common/rtl/video_timing/video_timing_pkg.vhd` and
+mirrored in C++ via `videomancer_abi.hpp` (`video_timing_configs[]`).
 
 ## Implementation
 
