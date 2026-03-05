@@ -428,7 +428,8 @@ namespace lzx {
         uint8_t  reserved_pad;     // Padding byte
         vmprog_parameter_config_v1_0 parameters[num_parameters];
         vmprog_preset_config_v1_0 presets[max_presets];  // Factory preset definitions
-        uint8_t reserved[22];  // Padding to 7712 total
+        uint16_t supported_timings;  // Bitmask of supported video_timing_id values (0 = all)
+        uint8_t reserved[20];  // Padding to 7712 total
     };
 
 #pragma pack(pop)
@@ -574,7 +575,8 @@ namespace lzx {
         2 +                                                   // 2 (parameter_count + preset_count + reserved_pad)
         sizeof(vmprog_parameter_config_v1_0) * vmprog_program_config_v1_0::num_parameters + // 6864
         sizeof(vmprog_preset_config_v1_0) * vmprog_program_config_v1_0::max_presets +       // 320
-        22,  // reserved padding
+        sizeof(uint16_t) +                                                                   // 2 (supported_timings)
+        20,  // reserved padding
         "vmprog_program_config_v1_0::struct_size calculation mismatch");
 
     static_assert(vmprog_signed_descriptor_v1_0::struct_size ==
@@ -1091,6 +1093,13 @@ namespace lzx {
             return vmprog_validation_result::invalid_enum_value;
         }
 
+        // Validate supported_timings bitmask (only bits 0-14 are valid timing IDs)
+        // Bit 15 corresponds to the reserved timing ID (0xF) and must not be set.
+        // A value of 0x0000 means "all timings supported" (backward compatible default).
+        if (config.supported_timings & 0x8000u) {
+            return vmprog_validation_result::reserved_field_not_zero;
+        }
+
         // Verify reserved fields are zeroed
         if (config.reserved_pad != 0) {
             return vmprog_validation_result::reserved_field_not_zero;
@@ -1157,8 +1166,8 @@ namespace lzx {
         // Create a copy of config with reserved fields zeroed
         vmprog_program_config_v1_0 config_copy = config;
 
-        // Zero out all reserved fields for deterministic hashing
-        // The main reserved field is at the end
+        // Zero out reserved fields for deterministic hashing.
+        // Note: supported_timings is NOT zeroed — it is meaningful data.
         for (size_t i = 0; i < sizeof(config_copy.reserved); ++i) {
             config_copy.reserved[i] = 0;
         }
@@ -1464,6 +1473,76 @@ namespace lzx {
     }
 
     // =============================================================================
+    // Video Timing Support Helpers
+    // =============================================================================
+
+    /// @brief Bitmask value representing "all timings supported" (default / backward compatible).
+    constexpr uint16_t vmprog_supported_timings_all = 0x0000;
+
+    /// @brief Full bitmask with all 15 valid timing bits set (bits 0-14).
+    constexpr uint16_t vmprog_supported_timings_every = 0x7FFF;
+
+    /**
+     * @brief Convert a video_timing_id enum value to its bitmask bit.
+     *
+     * @param timing_id 4-bit video timing ID (0x0 – 0xE)
+     * @return Bitmask with the corresponding bit set, or 0 if reserved (0xF)
+     */
+    inline constexpr uint16_t timing_id_to_mask(uint8_t timing_id) {
+        if (timing_id > 14) return 0;
+        return static_cast<uint16_t>(1u << timing_id);
+    }
+
+    /**
+     * @brief Check if a specific timing is supported by a program config.
+     *
+     * When supported_timings == 0 the program supports all timings (backward
+     * compatible with packages that pre-date the field).
+     *
+     * @param supported_timings The supported_timings bitmask from the config
+     * @param timing_id 4-bit video timing ID to test (0x0 – 0xE)
+     * @return true if the timing is supported
+     */
+    inline constexpr bool is_timing_supported(uint16_t supported_timings, uint8_t timing_id) {
+        if (supported_timings == vmprog_supported_timings_all) return true;
+        return (supported_timings & timing_id_to_mask(timing_id)) != 0;
+    }
+
+    /**
+     * @brief Check if a supported_timings mask includes any HD timings.
+     *
+     * HD timing IDs (from videomancer_abi.hpp):
+     *   1080i50=0x1, 1080i5994=0x2, 1080p24=0x3, 720p50=0x5, 720p5994=0x6,
+     *   1080p30=0x7, 1080p2398=0x9, 1080i60=0xA, 1080p25=0xB,
+     *   1080p2997=0xD, 720p60=0xE
+     *
+     * @param supported_timings The supported_timings bitmask
+     * @return true if any HD timing bit is set (or mask is 0 = all)
+     */
+    inline constexpr bool has_hd_timings(uint16_t supported_timings) {
+        if (supported_timings == vmprog_supported_timings_all) return true;
+        // HD timing bits: 1,2,3,5,6,7,9,A,B,D,E → mask 0x6EEE
+        constexpr uint16_t hd_mask = 0x6EEE;
+        return (supported_timings & hd_mask) != 0;
+    }
+
+    /**
+     * @brief Check if a supported_timings mask includes any SD timings.
+     *
+     * SD timing IDs (from videomancer_abi.hpp):
+     *   ntsc=0x0, 480p=0x4, pal=0x8, 576p=0xC
+     *
+     * @param supported_timings The supported_timings bitmask
+     * @return true if any SD timing bit is set (or mask is 0 = all)
+     */
+    inline constexpr bool has_sd_timings(uint16_t supported_timings) {
+        if (supported_timings == vmprog_supported_timings_all) return true;
+        // SD timing bits: 0,4,8,C → mask 0x1111
+        constexpr uint16_t sd_mask = 0x1111;
+        return (supported_timings & sd_mask) != 0;
+    }
+
+    // =============================================================================
     // Structure Initialization Helpers
     // =============================================================================
 
@@ -1499,6 +1578,7 @@ namespace lzx {
         config.core_id = vmprog_core_id_v1_0::yuv444_30b;
         config.parameter_count = 0;
         config.preset_count = 0;
+        config.supported_timings = 0; // 0 = all timings supported
     }
 
     /**

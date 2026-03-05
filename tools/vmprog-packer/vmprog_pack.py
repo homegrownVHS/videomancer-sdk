@@ -65,7 +65,7 @@ VERSION_MINOR = 0
 # Structure sizes
 HEADER_SIZE = 64
 TOC_ENTRY_SIZE = 64
-PROGRAM_CONFIG_SIZE = 7372
+PROGRAM_CONFIG_SIZE = 7712
 SIGNED_DESCRIPTOR_SIZE = 332
 SIGNATURE_SIZE = 64
 ARTIFACT_HASH_SIZE = 36
@@ -421,6 +421,41 @@ def build_vmprog_package(input_dir: Path, output_path: Path, sign: bool = True, 
     if not bitstreams:
         print("ERROR: No bitstreams found - at least one bitstream is required")
         return False
+
+    # Cross-validate supported_timings vs available bitstreams
+    # supported_timings is a uint16_t at offset: 64 + 14 + 4 + 4 + 32 + 64 + 32 + 32 + 128 + 128
+    #   + 2 + 1 + 1 + 572*12 + 40*8 = 7690
+    SUPPORTED_TIMINGS_OFFSET = 7690
+    supported_timings_mask = struct.unpack_from('<H', config_data, SUPPORTED_TIMINGS_OFFSET)[0]
+
+    if supported_timings_mask != 0:
+        # SD timing bits: 0,4,8,C → mask 0x1111
+        sd_mask = 0x1111
+        # HD timing bits: 1,2,3,5,6,7,9,A,B,D,E → mask 0x6EEE
+        hd_mask = 0x6EEE
+
+        has_sd_timings = (supported_timings_mask & sd_mask) != 0
+        has_hd_timings = (supported_timings_mask & hd_mask) != 0
+
+        sd_bitstream_types = {
+            TOCEntryType.BITSTREAM_SD_ANALOG,
+            TOCEntryType.BITSTREAM_SD_HDMI,
+            TOCEntryType.BITSTREAM_SD_DUAL,
+        }
+        hd_bitstream_types = {
+            TOCEntryType.BITSTREAM_HD_ANALOG,
+            TOCEntryType.BITSTREAM_HD_HDMI,
+            TOCEntryType.BITSTREAM_HD_DUAL,
+        }
+
+        available_types = {bs.entry_type for bs in bitstreams}
+        has_sd_bitstream = bool(available_types & sd_bitstream_types)
+        has_hd_bitstream = bool(available_types & hd_bitstream_types)
+
+        if has_sd_timings and not has_sd_bitstream:
+            print("WARNING: supported_timings includes SD timings but no SD bitstream found")
+        if has_hd_timings and not has_hd_bitstream:
+            print("WARNING: supported_timings includes HD timings but no HD bitstream found")
 
     # Load Ed25519 keys if signing is requested
     private_key = None

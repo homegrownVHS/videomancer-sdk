@@ -835,6 +835,22 @@ public:
     }
 
     /**
+     * @brief Read the supported_timings bitmask from the program configuration.
+     *
+     * @param out_timings Output bitmask (0 = all timings supported)
+     * @return Validation result code
+     */
+    vmprog_validation_result read_supported_timings(uint16_t& out_timings) {
+        vmprog_program_config_v1_0 config;
+        auto result = read_config(config);
+        if (result != vmprog_validation_result::ok) {
+            return result;
+        }
+        out_timings = config.supported_timings;
+        return vmprog_validation_result::ok;
+    }
+
+    /**
      * @brief Read specific payload by type.
      *
      * @param type Payload type to read

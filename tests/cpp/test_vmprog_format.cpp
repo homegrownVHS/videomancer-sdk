@@ -24,9 +24,9 @@ bool test_struct_sizes() {
         return false;
     }
 
-    if (sizeof(vmprog_program_config_v1_0) != 7372) {
+    if (sizeof(vmprog_program_config_v1_0) != 7712) {
         std::cerr << "FAILED: Struct size test - program config size is "
-                  << sizeof(vmprog_program_config_v1_0) << ", expected 7372" << std::endl;
+                  << sizeof(vmprog_program_config_v1_0) << ", expected 7712" << std::endl;
         return false;
     }
 
@@ -987,6 +987,204 @@ bool test_validate_header_toc_beyond_file() {
     return true;
 }
 
+// =============================================================================
+// Supported Timings Tests
+// =============================================================================
+
+// Test timing_id_to_mask helper
+bool test_timing_id_to_mask() {
+    // Bit 0 corresponds to timing ID 0 (ntsc)
+    if (timing_id_to_mask(0x0) != 0x0001) {
+        std::cerr << "FAILED: timing_id_to_mask - ntsc (0x0)" << std::endl;
+        return false;
+    }
+    // Bit 8 corresponds to timing ID 8 (pal)
+    if (timing_id_to_mask(0x8) != 0x0100) {
+        std::cerr << "FAILED: timing_id_to_mask - pal (0x8)" << std::endl;
+        return false;
+    }
+    // Bit 14 corresponds to timing ID 14 (720p60)
+    if (timing_id_to_mask(0xE) != 0x4000) {
+        std::cerr << "FAILED: timing_id_to_mask - 720p60 (0xE)" << std::endl;
+        return false;
+    }
+    // Reserved timing ID 15 returns 0
+    if (timing_id_to_mask(0xF) != 0x0000) {
+        std::cerr << "FAILED: timing_id_to_mask - reserved (0xF) should be 0" << std::endl;
+        return false;
+    }
+    // Out-of-range returns 0
+    if (timing_id_to_mask(0xFF) != 0x0000) {
+        std::cerr << "FAILED: timing_id_to_mask - out of range should be 0" << std::endl;
+        return false;
+    }
+    std::cout << "PASSED: timing_id_to_mask test" << std::endl;
+    return true;
+}
+
+// Test is_timing_supported helper
+bool test_is_timing_supported() {
+    // 0 = all supported
+    if (!is_timing_supported(0x0000, 0x0)) {
+        std::cerr << "FAILED: is_timing_supported - 0x0000 should support all" << std::endl;
+        return false;
+    }
+    if (!is_timing_supported(0x0000, 0xE)) {
+        std::cerr << "FAILED: is_timing_supported - 0x0000 should support 720p60" << std::endl;
+        return false;
+    }
+
+    // Specific mask: only ntsc (bit 0) and pal (bit 8)
+    uint16_t mask = 0x0101; // bits 0 and 8
+    if (!is_timing_supported(mask, 0x0)) {
+        std::cerr << "FAILED: is_timing_supported - ntsc should be supported" << std::endl;
+        return false;
+    }
+    if (!is_timing_supported(mask, 0x8)) {
+        std::cerr << "FAILED: is_timing_supported - pal should be supported" << std::endl;
+        return false;
+    }
+    if (is_timing_supported(mask, 0x1)) {
+        std::cerr << "FAILED: is_timing_supported - 1080i50 should NOT be supported" << std::endl;
+        return false;
+    }
+    if (is_timing_supported(mask, 0xE)) {
+        std::cerr << "FAILED: is_timing_supported - 720p60 should NOT be supported" << std::endl;
+        return false;
+    }
+
+    std::cout << "PASSED: is_timing_supported test" << std::endl;
+    return true;
+}
+
+// Test has_hd_timings and has_sd_timings
+bool test_hd_sd_timing_classification() {
+    // 0 = all => both HD and SD
+    if (!has_hd_timings(0x0000)) {
+        std::cerr << "FAILED: has_hd_timings - 0 should return true" << std::endl;
+        return false;
+    }
+    if (!has_sd_timings(0x0000)) {
+        std::cerr << "FAILED: has_sd_timings - 0 should return true" << std::endl;
+        return false;
+    }
+
+    // SD-only mask: ntsc (0) + pal (8) => 0x0101
+    uint16_t sd_only = 0x0101;
+    if (has_hd_timings(sd_only)) {
+        std::cerr << "FAILED: has_hd_timings - SD-only mask should be false" << std::endl;
+        return false;
+    }
+    if (!has_sd_timings(sd_only)) {
+        std::cerr << "FAILED: has_sd_timings - SD-only mask should be true" << std::endl;
+        return false;
+    }
+
+    // HD-only mask: 1080i50 (1) + 720p60 (14) => 0x4002
+    uint16_t hd_only = 0x4002;
+    if (!has_hd_timings(hd_only)) {
+        std::cerr << "FAILED: has_hd_timings - HD-only mask should be true" << std::endl;
+        return false;
+    }
+    if (has_sd_timings(hd_only)) {
+        std::cerr << "FAILED: has_sd_timings - HD-only mask should be false" << std::endl;
+        return false;
+    }
+
+    std::cout << "PASSED: HD/SD timing classification test" << std::endl;
+    return true;
+}
+
+// Test that supported_timings defaults to 0 in init
+bool test_supported_timings_init() {
+    vmprog_program_config_v1_0 config;
+    memset(&config, 0xFF, sizeof(config));
+    init_vmprog_config(config);
+
+    if (config.supported_timings != 0) {
+        std::cerr << "FAILED: supported_timings should be 0 after init" << std::endl;
+        return false;
+    }
+
+    std::cout << "PASSED: supported_timings init test" << std::endl;
+    return true;
+}
+
+// Test that validation accepts 0 (all timings) and valid masks
+bool test_validate_supported_timings_valid() {
+    vmprog_program_config_v1_0 config;
+    init_vmprog_config(config);
+    safe_strncpy(config.program_id, "com.test.timing", sizeof(config.program_id));
+    safe_strncpy(config.program_name, "TimingTest", sizeof(config.program_name));
+    safe_strncpy(config.author, "Test", sizeof(config.author));
+    safe_strncpy(config.license, "MIT", sizeof(config.license));
+    safe_strncpy(config.category, "Test", sizeof(config.category));
+    safe_strncpy(config.description, "Test", sizeof(config.description));
+
+    // 0 = all => valid
+    config.supported_timings = 0x0000;
+    auto result = validate_vmprog_program_config_v1_0(config);
+    if (result != vmprog_validation_result::ok) {
+        std::cerr << "FAILED: Validate supported_timings 0 (all) should pass, got "
+                  << static_cast<int>(result) << std::endl;
+        return false;
+    }
+
+    // Only ntsc and pal => valid
+    config.supported_timings = 0x0101;
+    result = validate_vmprog_program_config_v1_0(config);
+    if (result != vmprog_validation_result::ok) {
+        std::cerr << "FAILED: Validate supported_timings 0x0101 should pass, got "
+                  << static_cast<int>(result) << std::endl;
+        return false;
+    }
+
+    // All 15 timings (bits 0-14) => valid
+    config.supported_timings = 0x7FFF;
+    result = validate_vmprog_program_config_v1_0(config);
+    if (result != vmprog_validation_result::ok) {
+        std::cerr << "FAILED: Validate supported_timings 0x7FFF should pass, got "
+                  << static_cast<int>(result) << std::endl;
+        return false;
+    }
+
+    std::cout << "PASSED: Validate supported_timings valid cases" << std::endl;
+    return true;
+}
+
+// Test that validation rejects bit 15 (reserved timing ID)
+bool test_validate_supported_timings_reserved_bit() {
+    vmprog_program_config_v1_0 config;
+    init_vmprog_config(config);
+    safe_strncpy(config.program_id, "com.test.timing", sizeof(config.program_id));
+    safe_strncpy(config.program_name, "TimingTest", sizeof(config.program_name));
+    safe_strncpy(config.author, "Test", sizeof(config.author));
+    safe_strncpy(config.license, "MIT", sizeof(config.license));
+    safe_strncpy(config.category, "Test", sizeof(config.category));
+    safe_strncpy(config.description, "Test", sizeof(config.description));
+
+    // Bit 15 set => reserved_field_not_zero
+    config.supported_timings = 0x8000;
+    auto result = validate_vmprog_program_config_v1_0(config);
+    if (result != vmprog_validation_result::reserved_field_not_zero) {
+        std::cerr << "FAILED: Validate supported_timings 0x8000 should reject reserved bit, got "
+                  << static_cast<int>(result) << std::endl;
+        return false;
+    }
+
+    // All bits including reserved => rejected
+    config.supported_timings = 0xFFFF;
+    result = validate_vmprog_program_config_v1_0(config);
+    if (result != vmprog_validation_result::reserved_field_not_zero) {
+        std::cerr << "FAILED: Validate supported_timings 0xFFFF should reject reserved bit, got "
+                  << static_cast<int>(result) << std::endl;
+        return false;
+    }
+
+    std::cout << "PASSED: Validate supported_timings reserved bit rejection" << std::endl;
+    return true;
+}
+
 // Main test runner
 int main() {
     std::cout << "======================================" << std::endl;
@@ -1046,6 +1244,12 @@ int main() {
     RUN_TEST(test_safe_strncpy_zero_size);
     RUN_TEST(test_validate_header_file_size_mismatch);
     RUN_TEST(test_validate_header_toc_beyond_file);
+    RUN_TEST(test_timing_id_to_mask);
+    RUN_TEST(test_is_timing_supported);
+    RUN_TEST(test_hd_sd_timing_classification);
+    RUN_TEST(test_supported_timings_init);
+    RUN_TEST(test_validate_supported_timings_valid);
+    RUN_TEST(test_validate_supported_timings_reserved_bit);
 
     std::cout << std::endl;
     std::cout << "======================================" << std::endl;

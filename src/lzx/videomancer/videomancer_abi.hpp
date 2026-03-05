@@ -73,5 +73,31 @@ namespace videomancer_abi_v1_0
         reserved     = 0xF   // Reserved
     };
 
+    /// @brief Total number of valid (non-reserved) timing IDs.
+    constexpr uint8_t video_timing_id_count = 15;
+
+    /// @brief Convert video_timing_id to its canonical string name.
+    /// @details Names match the TOML `supported_timings` array values.
+    inline const char* video_timing_id_to_string(video_timing_id id) {
+        switch (id) {
+            case video_timing_id::ntsc:        return "ntsc";
+            case video_timing_id::_1080i50:    return "1080i50";
+            case video_timing_id::_1080i5994:  return "1080i5994";
+            case video_timing_id::_1080p24:    return "1080p24";
+            case video_timing_id::_480p:       return "480p";
+            case video_timing_id::_720p50:     return "720p50";
+            case video_timing_id::_720p5994:   return "720p5994";
+            case video_timing_id::_1080p30:    return "1080p30";
+            case video_timing_id::pal:         return "pal";
+            case video_timing_id::_1080p2398:  return "1080p2398";
+            case video_timing_id::_1080i60:    return "1080i60";
+            case video_timing_id::_1080p25:    return "1080p25";
+            case video_timing_id::_576p:       return "576p";
+            case video_timing_id::_1080p2997:  return "1080p2997";
+            case video_timing_id::_720p60:     return "720p60";
+            default:                           return "reserved";
+        }
+    }
+
 } // namespace videomancer_abi_v1_0
 } // namespace lzx

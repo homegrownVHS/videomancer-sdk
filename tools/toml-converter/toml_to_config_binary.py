@@ -128,6 +128,25 @@ CORE_ID_MAP = {
     'yuv422_20b': 2,
 }
 
+# Video timing ID name → 4-bit ID mapping (matches videomancer_abi.hpp)
+VIDEO_TIMING_ID_MAP = {
+    'ntsc':       0x0,
+    '1080i50':    0x1,
+    '1080i5994':  0x2,
+    '1080p24':    0x3,
+    '480p':       0x4,
+    '720p50':     0x5,
+    '720p5994':   0x6,
+    '1080p30':    0x7,
+    'pal':        0x8,
+    '1080p2398':  0x9,
+    '1080i60':    0xA,
+    '1080p25':    0xB,
+    '576p':       0xC,
+    '1080p2997':  0xD,
+    '720p60':     0xE,
+}
+
 # Global flag for quiet mode
 QUIET = False
 
@@ -676,6 +695,23 @@ def validate_program_config(config: Dict[str, Any]) -> None:
             f"Too many parameters ({actual_count}, maximum: {NUM_PARAMETERS})"
         )
 
+    # Validate supported_timings (optional)
+    supported_timings = program.get('supported_timings', [])
+    if not isinstance(supported_timings, list):
+        raise ValueError("supported_timings must be an array of timing name strings")
+    seen_timings = set()
+    for timing_name in supported_timings:
+        if not isinstance(timing_name, str):
+            raise ValueError(f"supported_timings entry must be a string, got {type(timing_name).__name__}")
+        if timing_name not in VIDEO_TIMING_ID_MAP:
+            raise ValueError(
+                f"Unknown video timing '{timing_name}' in supported_timings. "
+                f"Valid values: {', '.join(sorted(VIDEO_TIMING_ID_MAP.keys()))}"
+            )
+        if timing_name in seen_timings:
+            raise ValueError(f"Duplicate timing '{timing_name}' in supported_timings")
+        seen_timings.add(timing_name)
+
     # Check for unique parameter_ids
     param_ids = []
     for i, param in enumerate(parameters):
@@ -747,7 +783,8 @@ def pack_program_config(config: Dict[str, Any]) -> bytes:
         - reserved_pad: uint8_t (1 byte)
         - parameters: vmprog_parameter_config_v1_0[12] (6864 bytes)
         - presets: vmprog_preset_config_v1_0[8] (320 bytes)
-        - reserved: uint8_t[22] (22 bytes)
+        - supported_timings: uint16_t (2 bytes) - bitmask of supported video timing IDs
+        - reserved: uint8_t[20] (20 bytes)
 
     Args:
         config: Dictionary containing program configuration from TOML
@@ -851,8 +888,16 @@ def pack_program_config(config: Dict[str, Any]) -> bytes:
         else:
             data += b'\x00' * PRESET_STRUCT_SIZE
 
-    # Reserved (22 bytes)
-    data += b'\x00' * 22
+    # Supported timings bitmask (2 bytes)
+    supported_timings = program.get('supported_timings', [])
+    timing_mask = 0
+    for timing_name in supported_timings:
+        timing_id = VIDEO_TIMING_ID_MAP[timing_name]
+        timing_mask |= (1 << timing_id)
+    data += struct.pack('<H', timing_mask)
+
+    # Reserved (20 bytes)
+    data += b'\x00' * 20
 
     assert len(data) == CONFIG_STRUCT_SIZE, f"Config size mismatch: {len(data)} != {CONFIG_STRUCT_SIZE}"
     return bytes(data)
@@ -926,6 +971,14 @@ def convert_toml_to_binary(toml_path: Path, output_path: Path) -> None:
         preset_count = len(config.get('preset', []))
         print(f"  Parameters: {param_count}/{NUM_PARAMETERS}")
         print(f"  Presets: {preset_count}/{MAX_PRESETS}")
+
+        # Display supported timings
+        sup_timings = program.get('supported_timings', [])
+        if sup_timings:
+            print(f"  Timings: {', '.join(sup_timings)}")
+        else:
+            print(f"  Timings: all (default)")
+
         print(f"  Binary size: {len(binary_data)} bytes")
 
 

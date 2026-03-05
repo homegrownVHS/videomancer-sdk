@@ -195,6 +195,36 @@
           "enum": [1, 2, 4],
           "default": 1,
           "examples": [1, 2, 4]
+        },
+        "supported_timings": {
+          "type": "array",
+          "description": "List of supported video timing standards. When omitted or empty, the program supports all timings. Each entry is a 4-bit video_timing_id name. The firmware uses this to reject loading a program when the current video timing is not in the list.",
+          "items": {
+            "type": "string",
+            "enum": [
+              "ntsc",
+              "1080i50",
+              "1080i5994",
+              "1080p24",
+              "480p",
+              "720p50",
+              "720p5994",
+              "1080p30",
+              "pal",
+              "1080p2398",
+              "1080i60",
+              "1080p25",
+              "576p",
+              "1080p2997",
+              "720p60"
+            ]
+          },
+          "uniqueItems": true,
+          "examples": [
+            [],
+            ["ntsc", "pal", "480p", "576p"],
+            ["720p50", "720p5994", "720p60", "1080i50", "1080i5994", "1080i60", "1080p24", "1080p2398", "1080p25", "1080p2997", "1080p30"]
+          ]
         }
       },
       "additionalProperties": false,
