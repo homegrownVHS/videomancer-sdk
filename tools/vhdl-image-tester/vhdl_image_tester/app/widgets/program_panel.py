@@ -34,6 +34,7 @@ from PyQt6.QtWidgets import (
 from ...core.config import FPGA_CONFIGS, PROGRAMS_ROOT, SIM_MAX_IMAGE_DIM, TEST_IMAGES_ROOT
 from ...core.image_converter import collect_test_images
 from ...core.program_loader import Program, list_programs, load_program
+from .combo_fix import fix_combo_popup
 
 
 class ProgramPanel(QWidget):
@@ -139,6 +140,7 @@ class ProgramPanel(QWidget):
         self._prog_combo = QComboBox()
         self._prog_combo.setMinimumWidth(200)
         self._prog_combo.currentIndexChanged.connect(self._on_program_changed)
+        fix_combo_popup(self._prog_combo)
         prog_layout.addWidget(self._prog_combo)
 
         self._prog_desc = QLabel()
@@ -156,6 +158,7 @@ class ProgramPanel(QWidget):
 
         self._img_combo = QComboBox()
         self._img_combo.currentIndexChanged.connect(self._on_image_changed)
+        fix_combo_popup(self._img_combo)
         img_layout.addWidget(self._img_combo)
 
         browse_row = QHBoxLayout()
@@ -181,6 +184,7 @@ class ProgramPanel(QWidget):
         self._config_combo = QComboBox()
         for cfg in FPGA_CONFIGS:
             self._config_combo.addItem(cfg)
+        fix_combo_popup(self._config_combo)
         sim_form.addRow("FPGA config:", self._config_combo)
 
         self._dim_spin = QSpinBox()
@@ -258,8 +262,8 @@ class ProgramPanel(QWidget):
                 f"<i>{program.category}</i><br>"
                 f"{program.description[:120]}{'…' if len(program.description) > 120 else ''}"
             )
-            # Defer emission so the combo-box popup can close before any
-            # downstream layout work (e.g. RegisterPanel rebuild) happens.
+            # Defer signal emission so downstream layout rebuilds happen
+            # after the combo popup has fully closed.
             QTimer.singleShot(0, lambda p=program: self.program_changed.emit(p))
         except Exception as exc:  # noqa: BLE001
             self._prog_desc.setText(f"<span style='color:red'>Error: {exc}</span>")

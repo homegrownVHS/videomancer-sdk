@@ -652,32 +652,32 @@
           "toggle_switch_7": {
             "type": "integer",
             "minimum": 0,
-            "maximum": 1023,
-            "description": "Value for toggle switch 7"
+            "maximum": 1,
+            "description": "Label index for toggle switch 7 (0 = Off/first label, 1 = On/second label). Toggle switches are binary controls."
           },
           "toggle_switch_8": {
             "type": "integer",
             "minimum": 0,
-            "maximum": 1023,
-            "description": "Value for toggle switch 8"
+            "maximum": 1,
+            "description": "Label index for toggle switch 8 (0 = Off/first label, 1 = On/second label). Toggle switches are binary controls."
           },
           "toggle_switch_9": {
             "type": "integer",
             "minimum": 0,
-            "maximum": 1023,
-            "description": "Value for toggle switch 9"
+            "maximum": 1,
+            "description": "Label index for toggle switch 9 (0 = Off/first label, 1 = On/second label). Toggle switches are binary controls."
           },
           "toggle_switch_10": {
             "type": "integer",
             "minimum": 0,
-            "maximum": 1023,
-            "description": "Value for toggle switch 10"
+            "maximum": 1,
+            "description": "Label index for toggle switch 10 (0 = Off/first label, 1 = On/second label). Toggle switches are binary controls."
           },
           "toggle_switch_11": {
             "type": "integer",
             "minimum": 0,
-            "maximum": 1023,
-            "description": "Value for toggle switch 11"
+            "maximum": 1,
+            "description": "Label index for toggle switch 11 (0 = Off/first label, 1 = On/second label). Toggle switches are binary controls."
           },
           "linear_potentiometer_12": {
             "type": "integer",

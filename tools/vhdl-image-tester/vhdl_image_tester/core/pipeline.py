@@ -77,15 +77,16 @@ class PipelineResult:
 # ---------------------------------------------------------------------------
 
 def run_pipeline(
-    program:         Program,
-    source_image:    Image.Image,
-    register_values: dict[str, int],
-    fpga_config:     str                    = SIM_DEFAULT_CONFIG,
-    max_image_dim:   int                    = SIM_MAX_IMAGE_DIM,
-    warmup_frames:   int                    = SIM_WARMUP_FRAMES,
-    capture_frames:  int                    = SIM_CAPTURE_FRAMES,
-    log_callback:    Callable[[str], None]  = print,
-    build_dir:       Path | None            = None,
+    program:           Program,
+    source_image:      Image.Image,
+    register_values:   dict[str, int],
+    fpga_config:       str                    = SIM_DEFAULT_CONFIG,
+    max_image_dim:     int                    = SIM_MAX_IMAGE_DIM,
+    warmup_frames:     int                    = SIM_WARMUP_FRAMES,
+    capture_frames:    int                    = SIM_CAPTURE_FRAMES,
+    log_callback:      Callable[[str], None]  = print,
+    progress_callback: Callable[[int, int], None] | None = None,
+    build_dir:         Path | None            = None,
 ) -> PipelineResult:
     """Run the full VHDL simulation pipeline synchronously.
 
@@ -162,12 +163,13 @@ def run_pipeline(
         # ── 4. Run GHDL ──────────────────────────────────────────────────────
         emit("[4/5] Running GHDL simulation...")
         run_simulation(
-            program_dir    = program.program_dir,
-            testbench_path = tb_path,
-            build_dir      = run_dir,
-            config         = fpga_config,
-            core           = program.core,
-            log_callback   = emit,
+            program_dir       = program.program_dir,
+            testbench_path    = tb_path,
+            build_dir         = run_dir,
+            config            = fpga_config,
+            core              = program.core,
+            log_callback      = emit,
+            progress_callback = progress_callback,
         )
 
         # ── 5. Read output ───────────────────────────────────────────────────
@@ -217,10 +219,12 @@ def _make_simulation_worker_class() -> type:
         Signals
         -------
         log_line(str)            : Emitted for each pipeline log line.
+        progress(int, int)       : Emitted with (current_frame, total_frames).
         finished(PipelineResult) : Emitted when the pipeline completes.
         """
 
         log_line: pyqtSignal = pyqtSignal(str)
+        progress: pyqtSignal = pyqtSignal(int, int)  # (current_frame, total_frames)
         finished: pyqtSignal = pyqtSignal(object)  # PipelineResult
 
         def __init__(
@@ -244,14 +248,15 @@ def _make_simulation_worker_class() -> type:
 
         def run(self) -> None:
             result = run_pipeline(
-                program         = self._program,
-                source_image    = self._source_image,
-                register_values = self._register_values,
-                fpga_config     = self._fpga_config,
-                max_image_dim   = self._max_image_dim,
-                warmup_frames   = self._warmup_frames,
-                capture_frames  = self._capture_frames,
-                log_callback    = self.log_line.emit,
+                program           = self._program,
+                source_image      = self._source_image,
+                register_values   = self._register_values,
+                fpga_config       = self._fpga_config,
+                max_image_dim     = self._max_image_dim,
+                warmup_frames     = self._warmup_frames,
+                capture_frames    = self._capture_frames,
+                log_callback      = self.log_line.emit,
+                progress_callback = self.progress.emit,
             )
             self.finished.emit(result)
 

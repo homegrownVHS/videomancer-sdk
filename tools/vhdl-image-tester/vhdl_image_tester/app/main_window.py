@@ -8,7 +8,7 @@ MainWindow: the top-level Qt window for the VHDL Image Tester.
 Layout
 ------
 ┌─────────────────────────────────────────────────────────────────┐
-│ Toolbar: [Generate ▶] [Reset] [Open run dir]    GHDL: v4.x      │
+│ Toolbar: [Generate ▶] [Reset]                   GHDL: v4.x      │
 ├─────────────┬───────────────────────────────────────────────────┤
 │             │                                                     │
 │  Program    │  Image Viewer (input │ output)                     │
@@ -23,8 +23,7 @@ Layout
 from __future__ import annotations
 
 import json
-import subprocess
-import shutil
+import time
 from datetime import datetime
 from pathlib import Path
 
@@ -156,9 +155,39 @@ class MainWindow(QMainWindow):
         self._status_bar = self.statusBar()
         self._progress   = QProgressBar()
         self._progress.setRange(0, 0)
-        self._progress.setFixedWidth(160)
+        self._progress.setFixedWidth(220)
+        self._progress.setTextVisible(True)
         self._progress.setVisible(False)
+        self._progress.setStyleSheet(
+            "QProgressBar { background: #2a2a2a; border: 1px solid #444; "
+            "border-radius: 3px; text-align: center; color: #e0e0e0; font-size: 11px; }"
+            "QProgressBar::chunk { background: #4a90d9; border-radius: 2px; }"
+        )
         self._status_bar.addPermanentWidget(self._progress)
+
+        # Progress bar chunk colours
+        self._PROGRESS_STYLE_WARMUP = (
+            "QProgressBar { background: #2a2a2a; border: 1px solid #444; "
+            "border-radius: 3px; text-align: center; color: #e0e0e0; font-size: 11px; }"
+            "QProgressBar::chunk { background: #c8a828; border-radius: 2px; }"
+        )
+        self._PROGRESS_STYLE_CAPTURE = (
+            "QProgressBar { background: #2a2a2a; border: 1px solid #444; "
+            "border-radius: 3px; text-align: center; color: #e0e0e0; font-size: 11px; }"
+            "QProgressBar::chunk { background: #4a90d9; border-radius: 2px; }"
+        )
+
+        # Smooth progress interpolation state
+        self._frame_times: list[float] = []   # monotonic timestamps per frame completion
+        self._sim_start_time: float = 0.0
+        self._last_frame: int = 0
+        self._total_frames: int = 0
+        self._warmup_frames: int = 0
+        self._in_warmup: bool = True
+        self._est_frame_secs: float = 0.0     # estimated seconds per frame
+        self._interp_timer = QTimer(self)
+        self._interp_timer.setInterval(100)
+        self._interp_timer.timeout.connect(self._on_interp_tick)
         self._status_lbl = QLabel("Ready")
         self._status_bar.addWidget(self._status_lbl)
 
@@ -193,15 +222,6 @@ class MainWindow(QMainWindow):
         layout.addWidget(self._abort_btn)
 
         layout.addSpacing(8)
-
-        # Open run directory
-        open_dir_btn = QPushButton("Open Run Dir")
-        open_dir_btn.setFixedHeight(34)
-        open_dir_btn.setToolTip("Open the GHDL build directory in the file manager")
-        open_dir_btn.clicked.connect(self._on_open_run_dir)
-        layout.addWidget(open_dir_btn)
-
-        layout.addSpacing(4)
 
         # Save output image
         self._save_result_btn = QPushButton("Save Result")
@@ -424,7 +444,7 @@ class MainWindow(QMainWindow):
             f"Max dim: {self._program_panel.max_image_dim}px\n"
             f"{'='*60}"
         )
-        self._set_running(True)
+        self._set_running(True, warmup_frames=self._program_panel.warmup_frames)
 
         self._worker = SimulationWorker(
             program         = self._current_program,
@@ -435,6 +455,7 @@ class MainWindow(QMainWindow):
             warmup_frames   = self._program_panel.warmup_frames,
         )
         self._worker.log_line.connect(self._on_log_line)
+        self._worker.progress.connect(self._on_progress)
         self._worker.finished.connect(self._on_simulation_finished)
         self._worker.start()
 
@@ -451,6 +472,92 @@ class MainWindow(QMainWindow):
     @pyqtSlot(str)
     def _on_log_line(self, line: str) -> None:
         self._log_panel.append(line)
+
+    @pyqtSlot(int, int)
+    def _on_progress(self, current_frame: int, total_frames: int) -> None:
+        """Update progress with per-frame timing estimation and smooth interpolation.
+
+        ``VIT_FRAME: N/T`` fires at the **start** of frame N (vsync falling
+        edge), so ``current_frame`` means "frame N just began rendering".
+        Completed frames = ``current_frame - 1``.
+
+        The frame-1 callback includes GHDL compilation/elaboration overhead
+        and is not representative of actual rendering speed.  The true
+        per-frame estimate is derived from subsequent frame deltas.
+        """
+        if total_frames <= 0:
+            return
+
+        now = time.monotonic()
+        self._total_frames = total_frames
+        # completed = frames fully rendered so far
+        completed = current_frame - 1
+        self._last_frame = completed
+        self._frame_times.append(now)
+
+        # Switch bar colour when we leave warmup
+        if self._in_warmup and current_frame > self._warmup_frames:
+            self._in_warmup = False
+            self._progress.setStyleSheet(self._PROGRESS_STYLE_CAPTURE)
+
+        n = len(self._frame_times)
+        if n >= 3:
+            # Use only post-frame-1 timings (skip startup overhead)
+            render_elapsed = self._frame_times[-1] - self._frame_times[1]
+            render_frames = n - 2
+            if render_frames > 0:
+                self._est_frame_secs = render_elapsed / render_frames
+        elif n == 2:
+            # Frame-1→frame-2 delta — first real per-frame measurement
+            self._est_frame_secs = self._frame_times[1] - self._frame_times[0]
+
+        if self._est_frame_secs > 0 and not self._interp_timer.isActive():
+            self._interp_timer.start()
+
+        # Use 1000 ticks for smooth sub-frame progress
+        self._progress.setRange(0, total_frames * 1000)
+        self._progress.setValue(completed * 1000)
+        self._update_progress_text(completed, 0.0)
+
+    def _on_interp_tick(self) -> None:
+        """Interpolate progress between frame callbacks for smooth bar movement."""
+        if self._est_frame_secs <= 0 or self._total_frames <= 0:
+            return
+
+        now = time.monotonic()
+        time_since_last = now - self._frame_times[-1]
+        frac = min(time_since_last / self._est_frame_secs, 0.95)
+        effective_frame = self._last_frame + frac
+
+        bar_val = int(effective_frame * 1000)
+        bar_max = self._total_frames * 1000
+        self._progress.setValue(min(bar_val, bar_max))
+        self._update_progress_text(self._last_frame, frac)
+
+    def _update_progress_text(self, frame: int, frac: float) -> None:
+        """Set the progress bar format string and status label with ETA."""
+        total = self._total_frames
+        effective = frame + frac
+        pct = min(int(100 * effective / total), 99) if total > 0 else 0
+
+        # ETA — only show once we have a reliable estimate (after frame 2)
+        eta_str = ""
+        if self._est_frame_secs > 0 and len(self._frame_times) >= 2:
+            remaining = (total - effective) * self._est_frame_secs
+            if remaining >= 60:
+                mins = int(remaining) // 60
+                secs = int(remaining) % 60
+                eta_str = f"  ~{mins}m {secs:02d}s left"
+            elif remaining >= 1:
+                eta_str = f"  ~{int(remaining + 0.5)}s left"
+            else:
+                eta_str = "  <1s left"
+
+        phase = "  warmup" if self._in_warmup else ""
+        self._progress.setFormat(f"{pct}%{eta_str}{phase}")
+        self._status_lbl.setText(
+            f"Simulating… frame {frame}/{total}{eta_str}{phase}"
+        )
 
     @pyqtSlot(object)
     def _on_simulation_finished(self, result: PipelineResult) -> None:
@@ -537,23 +644,32 @@ class MainWindow(QMainWindow):
         except Exception as exc:  # noqa: BLE001
             QMessageBox.warning(self, "Import Error", f"Could not import: {exc}")
 
-    @pyqtSlot()
-    def _on_open_run_dir(self) -> None:
-        from ..core.config import BUILD_DIR
-        name = self._current_program.name if self._current_program else ""
-        path = BUILD_DIR / name if name else BUILD_DIR
-        path.mkdir(parents=True, exist_ok=True)
-        for opener in ("xdg-open", "open", "explorer"):
-            if shutil.which(opener):
-                subprocess.Popen([opener, str(path)])
-                break
-
     # ── Helpers ──────────────────────────────────────────────────────────────
 
-    def _set_running(self, running: bool) -> None:
+    def _set_running(self, running: bool, warmup_frames: int = 0) -> None:
         self._generate_btn.setEnabled(not running)
         self._abort_btn.setEnabled(running)
         self._progress.setVisible(running)
         if running:
+            total_frames = warmup_frames + 1
+            # Reset timing state
+            self._frame_times.clear()
+            self._sim_start_time = time.monotonic()
+            self._last_frame = 0
+            self._total_frames = total_frames
+            self._warmup_frames = warmup_frames
+            self._in_warmup = True
+            self._est_frame_secs = 0.0
+            # Start at 0% with warmup (yellow) colour
+            self._progress.setStyleSheet(self._PROGRESS_STYLE_WARMUP)
+            if total_frames > 0:
+                self._progress.setRange(0, total_frames * 1000)
+                self._progress.setValue(0)
+                self._progress.setFormat("0%  warmup")
+            else:
+                self._progress.setRange(0, 0)
+                self._progress.setFormat("")
             self._log_panel.set_status("Running simulation…", "#fa0")
             self._status_lbl.setText("Running…")
+        else:
+            self._interp_timer.stop()

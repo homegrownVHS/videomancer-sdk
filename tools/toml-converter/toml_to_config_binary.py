@@ -265,6 +265,16 @@ def validate_parameter_config(param: Dict[str, Any], index: int) -> None:
         )
 
     if has_value_labels:
+        # Toggle switches are binary controls — exactly 2 value_labels
+        param_id_str = param.get('parameter_id', '')
+        if isinstance(param_id_str, str) and param_id_str in TOGGLE_SWITCH_IDS:
+            if len(value_labels) != 2:
+                raise ValueError(
+                    f"Parameter {index}: toggle switch '{param_id_str}' must have "
+                    f"exactly 2 value_labels (got {len(value_labels)}). "
+                    f"Toggle switches are binary controls."
+                )
+
         # Validate value_labels requirements
         if len(value_labels) < 2:
             raise ValueError(
@@ -462,6 +472,13 @@ def pack_empty_parameter() -> bytes:
     return b'\x00' * PARAM_STRUCT_SIZE
 
 
+# Toggle switch parameter IDs (binary hardware controls: 0 or 1023)
+TOGGLE_SWITCH_IDS = {
+    'toggle_switch_7', 'toggle_switch_8', 'toggle_switch_9',
+    'toggle_switch_10', 'toggle_switch_11'
+}
+
+
 def pack_preset(preset_dict: Dict[str, Any], parameters: list) -> bytes:
     """
     Pack a single preset configuration into binary format.
@@ -471,10 +488,17 @@ def pack_preset(preset_dict: Dict[str, Any], parameters: list) -> bytes:
         - values: uint16_t[12] (24 bytes, one per parameter slot)
 
     Parameters not listed in the preset inherit their initial_value from
-    the corresponding [[parameter]] definition. For toggle parameters that
-    use value_labels / initial_value_label, the converter resolves the label
-    index through the boolean control curve (0 for Off, 1023 for On). If no
+    the corresponding [[parameter]] definition.  For toggle switch
+    parameters, the default is resolved from initial_value_label through
+    the boolean control curve (label 0 -> 0, label 1 -> 1023).  If no
     [[parameter]] defines that slot, 512 is used.
+
+    Toggle switches are binary hardware controls with exactly two
+    positions.  In TOML presets, toggle values are **label indices**:
+    0 (Off / first label) or 1 (On / second label).  The converter maps
+    them to raw register values: 0 -> 0, 1 -> 1023.
+
+    Non-toggle (potentiometer) preset values remain raw 0-1023.
 
     Args:
         preset_dict: Dictionary containing preset configuration from TOML
@@ -491,39 +515,64 @@ def pack_preset(preset_dict: Dict[str, Any], parameters: list) -> bytes:
         raise ValueError(f"Preset name '{name}' exceeds 15 characters")
 
     # Build initial_value lookup from parameter definitions.
-    # For toggle/label parameters, resolve initial_value_label through the
-    # boolean control curve: label index 0 -> 0, label index 1 -> 1023.
+    # For toggle switches, resolve initial_value_label through the boolean
+    # control curve: label index 0 -> 0, label index 1 -> 1023.
     defaults = {}
+    toggle_slots = set()  # array indices that are toggle switches
     for param in parameters:
         pid = param.get('parameter_id', 'none')
         if isinstance(pid, str) and pid in PARAMETER_ID_MAP and PARAMETER_ID_MAP[pid] >= 1:
             idx = PARAMETER_ID_MAP[pid] - 1  # 1-indexed enum -> 0-indexed array
-            value_labels = param.get('value_labels', [])
-            if value_labels:
-                if 'initial_value_label' in param:
+            if pid in TOGGLE_SWITCH_IDS:
+                toggle_slots.add(idx)
+                value_labels = param.get('value_labels', [])
+                if value_labels and 'initial_value_label' in param:
                     label_index = value_labels.index(param['initial_value_label'])
-                else:
-                    label_index = 0
-                if len(value_labels) == 2:
                     defaults[idx] = 1023 if label_index >= 1 else 0
                 else:
-                    defaults[idx] = round(label_index * 1023 / max(len(value_labels) - 1, 1))
+                    defaults[idx] = 0
             else:
-                defaults[idx] = param.get('initial_value', 512)
+                value_labels = param.get('value_labels', [])
+                if value_labels:
+                    # Non-toggle with value_labels: resolve initial value
+                    # through the label curve for defaults only
+                    if 'initial_value_label' in param:
+                        label_index = value_labels.index(param['initial_value_label'])
+                    else:
+                        label_index = 0
+                    if len(value_labels) == 2:
+                        defaults[idx] = 1023 if label_index >= 1 else 0
+                    else:
+                        defaults[idx] = round(label_index * 1023 / max(len(value_labels) - 1, 1))
+                else:
+                    defaults[idx] = param.get('initial_value', 512)
 
     # Start with defaults for all 12 parameter slots
     values = [defaults.get(i, 512) for i in range(12)]
 
-    # Override with explicit preset values
-    for key, raw_value in preset_dict.items():
+    # Override with explicit preset values.
+    # Toggle switches accept label indices (0 or 1) and are converted to
+    # raw register values (0 or 1023); all other parameters use raw 0-1023.
+    for key, value in preset_dict.items():
         if key == 'name':
             continue
         param_enum = PARAMETER_ID_MAP.get(key)
         if param_enum is None or param_enum < 1:
             raise ValueError(f"Unknown preset parameter_id: {key}")
         array_index = param_enum - 1
-        if not (0 <= raw_value <= 1023):
-            raise ValueError(f"Preset value {raw_value} for {key} out of range 0-1023")
+        if key in TOGGLE_SWITCH_IDS:
+            # Toggle switch: value must be 0 or 1 (label index)
+            if value not in (0, 1):
+                raise ValueError(
+                    f"Preset value {value} for {key} must be 0 or 1 "
+                    f"(toggle switches are binary controls)"
+                )
+            raw_value = 1023 if value == 1 else 0
+        else:
+            # Continuous parameter: value is raw 0-1023
+            if not (0 <= value <= 1023):
+                raise ValueError(f"Preset value {value} for {key} out of range 0-1023")
+            raw_value = value
         values[array_index] = raw_value
 
     # Pack: 16-byte name (null-padded) + 12 x uint16_t LE
@@ -660,8 +709,17 @@ def validate_program_config(config: Dict[str, Any]) -> None:
                 raise ValueError(f"Preset {i}: unknown parameter_id '{key}'")
             if PARAMETER_ID_MAP[key] < 1:
                 raise ValueError(f"Preset {i}: parameter_id '{key}' is not a valid control")
-            if not isinstance(value, int) or not (0 <= value <= 1023):
-                raise ValueError(f"Preset {i}: value for '{key}' must be integer 0-1023")
+            if key in TOGGLE_SWITCH_IDS:
+                # Toggle switch: binary control, value must be 0 or 1
+                if not isinstance(value, int) or value not in (0, 1):
+                    raise ValueError(
+                        f"Preset {i}: value for toggle '{key}' must be 0 or 1 "
+                        f"(toggle switches are binary controls)"
+                    )
+            else:
+                # Continuous parameter: value must be raw 0-1023
+                if not isinstance(value, int) or not (0 <= value <= 1023):
+                    raise ValueError(f"Preset {i}: value for '{key}' must be integer 0-1023")
 
 
 def pack_program_config(config: Dict[str, Any]) -> bytes:

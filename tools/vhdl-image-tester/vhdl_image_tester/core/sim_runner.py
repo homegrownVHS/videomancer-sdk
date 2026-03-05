@@ -36,6 +36,7 @@ _GHDL_STD   = "--std=08"
 _TOP_ENTITY = "tb_vit"
 
 LogCallback = Callable[[str], None]
+ProgressCallback = Callable[[int, int], None]  # (current_frame, total_frames)
 
 
 # ---------------------------------------------------------------------------
@@ -219,12 +220,13 @@ def _is_program_top_arch(path: Path) -> bool:
 # ---------------------------------------------------------------------------
 
 def run_simulation(
-    program_dir:   Path,
-    testbench_path: Path,
-    build_dir:     Path,
-    config:        str = "sd_analog",
-    core:          str = "yuv444_30b",
-    log_callback:  LogCallback | None = None,
+    program_dir:      Path,
+    testbench_path:   Path,
+    build_dir:        Path,
+    config:           str = "sd_analog",
+    core:             str = "yuv444_30b",
+    log_callback:     LogCallback | None = None,
+    progress_callback: ProgressCallback | None = None,
 ) -> None:
     """
     Analyse, elaborate and run the GHDL simulation.
@@ -237,6 +239,8 @@ def run_simulation(
     config          : FPGA configuration name (e.g. 'sd_analog').
     core            : FPGA video core (e.g. 'yuv444_30b').
     log_callback    : Called with each line of output (stdout+stderr).
+    progress_callback : Called with (current_frame, total_frames) on each
+                        simulated frame boundary.
 
     Raises
     ------
@@ -270,7 +274,8 @@ def run_simulation(
     _log(log_callback, "\n[3/3] Running simulation...")
     run_cmd = [ghdl, "-r", _GHDL_STD, workdir_flag, _TOP_ENTITY]
     _run(run_cmd, build_dir, log_callback, description="run simulation",
-         check_output_marker="VIT_DONE")
+         check_output_marker="VIT_DONE",
+         progress_callback=progress_callback)
 
     _log(log_callback, "\n=== Simulation complete ===")
 
@@ -294,12 +299,16 @@ def _require_ghdl() -> str:
     return ghdl
 
 
+_RE_VIT_FRAME = re.compile(r"VIT_FRAME:\s*(\d+)/(\d+)")
+
+
 def _run(
     cmd: list[str],
     cwd: Path,
     log_callback: LogCallback | None,
     description:  str = "",
     check_output_marker: str | None = None,
+    progress_callback: ProgressCallback | None = None,
 ) -> str:
     """Execute *cmd*, stream output to *log_callback*, raise on non-zero exit."""
     proc = subprocess.Popen(
@@ -319,6 +328,13 @@ def _run(
         # Suppress GHDL numeric_std metavalue warnings (expected during pipeline warmup)
         if "metavalue detected" in line:
             continue
+        # Parse per-frame progress reports from the testbench
+        frame_match = _RE_VIT_FRAME.search(line)
+        if frame_match:
+            current = int(frame_match.group(1))
+            total   = int(frame_match.group(2))
+            if progress_callback is not None:
+                progress_callback(current, total)
         # Highlight capture reports from the testbench
         if "VIT_CAPTURE" in line or "VIT_CAPTURED" in line:
             _log(log_callback, f"  ✦ {line}")

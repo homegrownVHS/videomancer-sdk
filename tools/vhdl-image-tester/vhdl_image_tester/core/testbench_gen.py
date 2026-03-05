@@ -85,6 +85,9 @@ architecture sim of tb_vit is
     -- Number of output frames to skip before capturing
     constant C_WARMUP_FRAMES   : natural := {warmup_frames};
 
+    -- Total expected output frames (warmup + capture)
+    constant C_TOTAL_FRAMES    : natural := {total_frames};
+
     -- Active-video region offsets from sync edges (match stimulus generator)
     constant C_H_BLANK_HALF    : natural := {h_blank_half};
     constant C_V_BLANK_HALF    : natural := {v_blank_half};
@@ -198,6 +201,9 @@ begin
                 v_out_frame := v_out_frame + 1;
                 v_line_in_frame := 0;
                 v_col_in_line   := 0;
+                report "VIT_FRAME: " & integer'image(v_out_frame)
+                    & "/" & integer'image(C_TOTAL_FRAMES)
+                    severity note;
                 if v_out_frame > C_WARMUP_FRAMES and not v_capturing then
                     v_capturing := true;
                     report "VIT_CAPTURE: starting capture at output frame "
@@ -284,6 +290,8 @@ def generate_testbench(
     """
     reg_inits = _build_register_inits(register_values)
 
+    total_frames = warmup_frames + 1  # warmup + capture frame
+
     content = _TB_TEMPLATE.format(
         clk_period_ns = clk_period_ns,
         stim_file     = str(stimulus_path).replace("\\", "/"),
@@ -292,6 +300,7 @@ def generate_testbench(
         img_width     = img_width,
         img_height    = img_height,
         warmup_frames = warmup_frames,
+        total_frames  = total_frames,
         h_blank_half  = h_blank_half,
         v_blank_half  = v_blank_half,
     )

@@ -16,7 +16,7 @@ TOML metadata via the Program dataclass.
 
 from __future__ import annotations
 
-from PyQt6.QtCore import Qt, pyqtSignal
+from PyQt6.QtCore import Qt, QTimer, pyqtSignal
 from PyQt6.QtWidgets import (
     QCheckBox,
     QComboBox,
@@ -33,6 +33,7 @@ from PyQt6.QtWidgets import (
 )
 
 from ...core.program_loader import Parameter, Preset, Program
+from .combo_fix import fix_combo_popup
 
 
 # ---------------------------------------------------------------------------
@@ -198,6 +199,7 @@ class RegisterPanel(QScrollArea):
         super().__init__(parent)
         self._rows:    list[_PotRow | _ToggleRow] = []
         self._program: Program | None = None
+        self._loading_preset: bool = False
 
         self.setWidgetResizable(True)
         self.setFrameShape(QFrame.Shape.NoFrame)
@@ -216,6 +218,7 @@ class RegisterPanel(QScrollArea):
         self._preset_combo = QComboBox()
         self._preset_combo.setToolTip("Load a factory preset by name")
         self._preset_combo.currentIndexChanged.connect(self._on_preset_changed)
+        fix_combo_popup(self._preset_combo)
 
     # ── Public API ──────────────────────────────────────────────────────────
 
@@ -372,15 +375,23 @@ class RegisterPanel(QScrollArea):
         preset = self._preset_combo.itemData(index)
         if not isinstance(preset, Preset):
             return
-        values = self._program.resolve_preset_values(preset)
-        self.set_values(values)
+        # The _loading_preset flag prevents _on_any_changed from resetting
+        # the combo back to the placeholder while we programmatically update
+        # each control.
+        self._loading_preset = True
+        try:
+            values = self._program.resolve_preset_values(preset)
+            self.set_values(values)
+        finally:
+            self._loading_preset = False
         self.registers_changed.emit(self.current_values)
         self.preset_loaded.emit(preset.name)
 
     def _on_any_changed(self, _param_id: str, _val: int) -> None:
         # Reset the preset combo to the placeholder when the user manually
         # changes a control, so it doesn't falsely indicate a preset is active.
-        if self._preset_combo.currentIndex() > 0:
+        # Skip the reset while a preset is being programmatically loaded.
+        if not self._loading_preset and self._preset_combo.currentIndex() > 0:
             self._preset_combo.blockSignals(True)
             self._preset_combo.setCurrentIndex(0)
             self._preset_combo.blockSignals(False)
