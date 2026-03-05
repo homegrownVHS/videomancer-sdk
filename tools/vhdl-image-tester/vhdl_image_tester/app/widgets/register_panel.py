@@ -274,9 +274,22 @@ class RegisterPanel(QScrollArea):
 
     def _clear_rows(self) -> None:
         self._rows.clear()
-        while self._root_layout.count():
-            item = self._root_layout.takeAt(0)
-            if item.widget():
+        # Remove _preset_combo from its current layout without destroying it —
+        # it is built once in __init__ and reused across program loads.  We
+        # temporarily re-parent it to _container so it stays alive even if
+        # _build_rows doesn't add it back (no-preset programs).
+        self._preset_combo.setParent(self._container)
+        self._clear_layout(self._root_layout)
+
+    def _clear_layout(self, layout: QVBoxLayout) -> None:
+        """Recursively remove and delete all items from *layout*."""
+        while layout.count():
+            item = layout.takeAt(0)
+            child_layout = item.layout()
+            if child_layout is not None:
+                self._clear_layout(child_layout)
+                child_layout.deleteLater()
+            elif item.widget() is not None and item.widget() is not self._preset_combo:
                 item.widget().deleteLater()
 
     def _populate_presets(self, program: Program | None) -> None:
