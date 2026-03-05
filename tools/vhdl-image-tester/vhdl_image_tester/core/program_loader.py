@@ -23,6 +23,24 @@ from .config import PROGRAMS_ROOT, PARAM_ID_TO_REGISTER, ABI_REG_TOGGLES, ABI_TO
 
 
 # ---------------------------------------------------------------------------
+# Preset dataclass
+# ---------------------------------------------------------------------------
+
+@dataclass
+class Preset:
+    """A named factory preset loaded from a ``[[preset]]`` TOML section.
+
+    Each preset stores a *name* and a sparse mapping of ``parameter_id`` →
+    raw value.  Parameters not listed in the preset inherit the program's
+    default ``initial_value`` / ``initial_value_label``.
+    """
+
+    name:   str
+    values: dict[str, int] = field(default_factory=dict)
+    """Mapping of parameter_id → raw value (0–1023 for pots, 0/1 for toggles)."""
+
+
+# ---------------------------------------------------------------------------
 # Parameter dataclass
 # ---------------------------------------------------------------------------
 
@@ -109,6 +127,9 @@ class Program:
     # [[parameter]] array
     parameters:     list[Parameter] = field(default_factory=list)
 
+    # [[preset]] array — factory presets from TOML
+    presets:        list[Preset] = field(default_factory=list)
+
     @property
     def vhd_files(self) -> list[Path]:
         """All VHDL files in the program directory, dependency-sorted,
@@ -136,6 +157,34 @@ class Program:
         if vhdl_delay is not None:
             return vhdl_delay
         return 0
+    def get_preset_names(self) -> list[str]:
+        """Return a list of available preset names."""
+        return [p.name for p in self.presets]
+
+    def get_preset_by_name(self, name: str) -> Preset | None:
+        """Look up a preset by name (case-insensitive)."""
+        lower = name.lower()
+        for p in self.presets:
+            if p.name.lower() == lower:
+                return p
+        return None
+
+    def resolve_preset_values(self, preset: Preset) -> dict[str, int]:
+        """Resolve a preset into a full parameter_id → raw value mapping.
+
+        Parameters not specified in the preset inherit from the program's
+        default initial values.
+        """
+        resolved: dict[str, int] = {}
+        for param in self.parameters:
+            if param.parameter_id in preset.values:
+                resolved[param.parameter_id] = preset.values[param.parameter_id]
+            elif param.is_toggle:
+                resolved[param.parameter_id] = 1 if param.initial_toggle_state else 0
+            else:
+                resolved[param.parameter_id] = param.initial_pot_value
+        return resolved
+
     def build_register_array(self, values: dict[str, int]) -> list[int]:
         """
         Given a mapping of parameter_id → raw 10-bit value, build the
@@ -228,6 +277,19 @@ def load_program(name: str, programs_root: Path | None = None) -> Program:
             display_float_digits = int(p.get("display_float_digits", 0)),
         ))
 
+    # Parse [[preset]] sections
+    presets: list[Preset] = []
+    for preset_dict in data.get("preset", []):
+        preset_name = preset_dict.get("name", "")
+        preset_values: dict[str, int] = {}
+        for key, value in preset_dict.items():
+            if key == "name":
+                continue
+            if key in PARAM_ID_TO_REGISTER and isinstance(value, (int, float)):
+                preset_values[key] = int(value)
+        if preset_name:
+            presets.append(Preset(name=preset_name, values=preset_values))
+
     return Program(
         name         = name,
         toml_path    = toml_path,
@@ -241,6 +303,7 @@ def load_program(name: str, programs_root: Path | None = None) -> Program:
         core         = prog_data.get("core", "yuv444_30b"),
         pipeline_delay = int(prog_data.get("pipeline_delay", -1)),
         parameters   = parameters,
+        presets      = presets,
     )
 
 

@@ -111,8 +111,11 @@ python videomancer-sdk/tools/vhdl-image-tester/run.py
 3. Select a **program** from the dropdown (populated from the programs folder).
 4. Select a **source image** from the file browser (or use a test image from `docs/test_images/`).
 5. Adjust **register sliders and toggles** to set control values.
-6. Press **F5** (or click **Generate**) to run the GHDL simulation.
-7. The before/after images appear side-by-side. Zoom with the scroll wheel.
+6. **(Optional)** If the program defines factory presets, use the **Preset** dropdown
+   above the register controls to load a preset by name. All sliders and toggles
+   update to match the preset. Manual changes reset the dropdown.
+7. Press **F5** (or click **Generate**) to run the GHDL simulation.
+8. The before/after images appear side-by-side. Zoom with the scroll wheel.
 
 ### CLI mode (headless)
 
@@ -140,6 +143,18 @@ lzx-vhdl-cli simulate cascade \
     --set toggle_switch_7=1023 \
     --output result.png
 
+# Load a factory preset by name (with optional per-value overrides)
+lzx-vhdl-cli simulate anodize \
+    --image photo.png \
+    --preset "Highlight" \
+    --output result.png
+
+lzx-vhdl-cli simulate anodize \
+    --image photo.png \
+    --preset "Highlight" \
+    --set rotary_potentiometer_1=900 \
+    --output result.png
+
 # Export default register values to JSON, edit, then import
 lzx-vhdl-cli export-regs cascade --output cascade_regs.json
 # … edit cascade_regs.json …
@@ -163,6 +178,7 @@ python -m vhdl_image_tester simulate cascade --image photo.png --output result.p
 | `--max-dim N` | 480 | Max image dimension (px) |
 | `--warmup-frames N` | 2 | Warmup frames before capture |
 | `--capture-frames N` | 1 | Output capture frames |
+| `--preset NAME` | — | Load a factory preset by name (from TOML `[[preset]]`) |
 | `--set KEY=VALUE` | — | Override a register value (repeatable) |
 | `--import-regs PATH` | — | Load registers from JSON (see `export-regs`) |
 | `--output PATH` | `<name>_output.png` | Output image path |
@@ -346,6 +362,33 @@ them later with **Import Regs**. This lets you create reproducible test presets.
                      0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
 }
 ```
+
+---
+
+## Factory Presets
+
+Many programs ship with **factory presets** defined as `[[preset]]` sections in
+their TOML configuration. Each preset is a named set of register values.
+
+### GUI
+
+When a program with presets is loaded, a **Preset** dropdown appears above the
+register controls. Selecting a preset applies all its values to the sliders and
+toggles. Parameters not specified in the preset keep their default values.
+Manually changing any control resets the dropdown to "(select preset)".
+
+### CLI
+
+Use `--preset NAME` to load a preset before any `--set` overrides:
+
+```bash
+lzx-vhdl-cli simulate worley \
+    --image photo.png \
+    --preset "Animated Lava" \
+    --output result.png
+```
+
+Use `lzx-vhdl-cli info <program>` to see available presets and their values.
 
 ---
 

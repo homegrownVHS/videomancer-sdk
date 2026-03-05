@@ -134,6 +134,7 @@ class MainWindow(QMainWindow):
 
         self._register_panel = RegisterPanel()
         self._register_panel.registers_changed.connect(self._on_registers_changed)
+        self._register_panel.preset_loaded.connect(self._on_preset_loaded)
         reg_inner.addWidget(self._register_panel)
 
         reg_tab.addTab(reg_widget, "Registers")
@@ -364,6 +365,7 @@ class MainWindow(QMainWindow):
             f"\n\u2500\u2500 Program loaded: {program.display_name} ({program.program_id}) \u2500\u2500\n"
             f"   Category: {program.category}   Core: {program.core}\n"
             f"   {len(program.parameters)} parameters   {len(program.vhd_files)} VHDL files"
+            f"   {len(program.presets)} preset(s)"
         )
 
     @pyqtSlot(object)
@@ -394,6 +396,11 @@ class MainWindow(QMainWindow):
     @pyqtSlot()
     def _on_reset_registers(self) -> None:
         self._register_panel.reset_to_defaults()
+
+    @pyqtSlot(str)
+    def _on_preset_loaded(self, name: str) -> None:
+        self._register_values = self._register_panel.current_values
+        self._log_panel.append(f"── Preset loaded: {name} ──")
 
     @pyqtSlot()
     def _on_generate(self) -> None:

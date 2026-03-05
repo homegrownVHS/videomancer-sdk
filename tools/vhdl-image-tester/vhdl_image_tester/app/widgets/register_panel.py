@@ -19,6 +19,7 @@ from __future__ import annotations
 from PyQt6.QtCore import Qt, pyqtSignal
 from PyQt6.QtWidgets import (
     QCheckBox,
+    QComboBox,
     QFrame,
     QGroupBox,
     QHBoxLayout,
@@ -31,7 +32,7 @@ from PyQt6.QtWidgets import (
     QWidget,
 )
 
-from ...core.program_loader import Parameter, Program
+from ...core.program_loader import Parameter, Preset, Program
 
 
 # ---------------------------------------------------------------------------
@@ -190,6 +191,8 @@ class RegisterPanel(QScrollArea):
 
     # Emitted whenever any register value changes
     registers_changed: pyqtSignal = pyqtSignal(dict)  # {parameter_id: raw_value}
+    # Emitted when a preset is loaded (preset name)
+    preset_loaded: pyqtSignal = pyqtSignal(str)
 
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
@@ -209,6 +212,11 @@ class RegisterPanel(QScrollArea):
         self._root_layout.setSpacing(4)
         self.setWidget(self._container)
 
+        # Preset combo (built once, shown/hidden per program)
+        self._preset_combo = QComboBox()
+        self._preset_combo.setToolTip("Load a factory preset by name")
+        self._preset_combo.currentIndexChanged.connect(self._on_preset_changed)
+
     # ── Public API ──────────────────────────────────────────────────────────
 
     def load_program(self, program: Program | None) -> None:
@@ -221,6 +229,26 @@ class RegisterPanel(QScrollArea):
         self._clear_rows()
         if program is not None:
             self._build_rows(program)
+        self._populate_presets(program)
+
+    def load_preset_by_name(self, name: str) -> bool:
+        """Apply a preset by name.  Returns True if found and applied."""
+        if self._program is None:
+            return False
+        preset = self._program.get_preset_by_name(name)
+        if preset is None:
+            return False
+        values = self._program.resolve_preset_values(preset)
+        self.set_values(values)
+        self.preset_loaded.emit(preset.name)
+        return True
+
+    @property
+    def preset_names(self) -> list[str]:
+        """Return available preset names for the current program."""
+        if self._program is None:
+            return []
+        return self._program.get_preset_names()
 
     @property
     def current_values(self) -> dict[str, int]:
@@ -251,6 +279,19 @@ class RegisterPanel(QScrollArea):
             if item.widget():
                 item.widget().deleteLater()
 
+    def _populate_presets(self, program: Program | None) -> None:
+        """Populate the preset combo from the program's embedded presets."""
+        self._preset_combo.blockSignals(True)
+        self._preset_combo.clear()
+        if program is not None and program.presets:
+            self._preset_combo.addItem("(select preset)", None)
+            for preset in program.presets:
+                self._preset_combo.addItem(preset.name, preset)
+            self._preset_combo.setVisible(True)
+        else:
+            self._preset_combo.setVisible(False)
+        self._preset_combo.blockSignals(False)
+
     def _build_rows(self, program: Program) -> None:
         if not program.parameters:
             lbl = QLabel("No parameters defined for this program.")
@@ -258,6 +299,17 @@ class RegisterPanel(QScrollArea):
             self._root_layout.addWidget(lbl)
             self._root_layout.addStretch()
             return
+
+        # Preset selector (shown only when program has presets)
+        if program.presets:
+            preset_row = QHBoxLayout()
+            preset_row.setSpacing(6)
+            preset_lbl = QLabel("Preset:")
+            preset_lbl.setStyleSheet("color: #aaa; font-weight: bold;")
+            preset_lbl.setFixedWidth(50)
+            preset_row.addWidget(preset_lbl)
+            preset_row.addWidget(self._preset_combo, stretch=1)
+            self._root_layout.addLayout(preset_row)
 
         # Group parameters by type for visual separation
         pots     = [p for p in program.parameters if p.is_pot]
@@ -301,5 +353,22 @@ class RegisterPanel(QScrollArea):
 
     # ── Slots ────────────────────────────────────────────────────────────────
 
+    def _on_preset_changed(self, index: int) -> None:
+        if index <= 0 or self._program is None:
+            return  # index 0 is the placeholder "(select preset)"
+        preset = self._preset_combo.itemData(index)
+        if not isinstance(preset, Preset):
+            return
+        values = self._program.resolve_preset_values(preset)
+        self.set_values(values)
+        self.registers_changed.emit(self.current_values)
+        self.preset_loaded.emit(preset.name)
+
     def _on_any_changed(self, _param_id: str, _val: int) -> None:
+        # Reset the preset combo to the placeholder when the user manually
+        # changes a control, so it doesn't falsely indicate a preset is active.
+        if self._preset_combo.currentIndex() > 0:
+            self._preset_combo.blockSignals(True)
+            self._preset_combo.setCurrentIndex(0)
+            self._preset_combo.blockSignals(False)
         self.registers_changed.emit(self.current_values)

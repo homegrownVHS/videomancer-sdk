@@ -56,14 +56,35 @@ def _load_registers(
     program,
     set_args: list[str] | None,
     import_path: str | None,
+    preset_name: str | None = None,
 ) -> dict[str, int]:
-    """Build a register dict from *program* defaults, then apply overrides."""
+    """Build a register dict from *program* defaults, then apply overrides.
+
+    Precedence (lowest to highest):
+      1. Program initial values (defaults)
+      2. Named preset (``--preset``)
+      3. Imported JSON (``--import-regs``)
+      4. Individual overrides (``--set``)
+    """
     regs: dict[str, int] = {}
     for param in program.parameters:
         if param.is_toggle:
             regs[param.parameter_id] = 1 if param.initial_toggle_state else 0
         else:
             regs[param.parameter_id] = param.initial_value
+
+    if preset_name:
+        preset = program.get_preset_by_name(preset_name)
+        if preset is None:
+            available = ", ".join(program.get_preset_names()) or "(none)"
+            print(
+                f"[cli] ERROR: no preset named {preset_name!r} for program {program.name!r}.\n"
+                f"       Available presets: {available}",
+                file=sys.stderr,
+            )
+            sys.exit(1)
+        regs = program.resolve_preset_values(preset)
+        print(f"[cli] Loaded preset: {preset.name}")
 
     if import_path:
         data = json.loads(Path(import_path).read_text())
@@ -137,6 +158,11 @@ def _cmd_info(args: argparse.Namespace) -> int:
             )
     else:
         print("\n(no parameters)")
+    if prog.presets:
+        print(f"\nPresets ({len(prog.presets)}):")
+        for preset in prog.presets:
+            overrides = ", ".join(f"{k}={v}" for k, v in preset.values.items())
+            print(f"  \"{preset.name}\"  [{overrides}]")
     return 0
 
 
@@ -201,7 +227,11 @@ def _cmd_simulate(args: argparse.Namespace) -> int:
         return 1
 
     # Assemble register values
-    regs = _load_registers(prog, args.set, getattr(args, "import_regs", None))
+    regs = _load_registers(
+        prog, args.set,
+        getattr(args, "import_regs", None),
+        getattr(args, "preset", None),
+    )
 
     # Determine build dir override
     build_dir = Path(args.build_dir) if getattr(args, "build_dir", None) else None
@@ -298,6 +328,10 @@ def _build_parser() -> argparse.ArgumentParser:
     p_sim.add_argument(
         "--capture-frames", metavar="N", type=int, default=SIM_CAPTURE_FRAMES,
         help=f"Capture frames (default: {SIM_CAPTURE_FRAMES})",
+    )
+    p_sim.add_argument(
+        "--preset", metavar="NAME",
+        help="Load an embedded factory preset by name before applying other overrides.",
     )
     p_sim.add_argument(
         "--set", metavar="KEY=VALUE", action="append", dest="set",
