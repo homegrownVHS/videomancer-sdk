@@ -307,6 +307,317 @@ def load_program(name: str, programs_root: Path | None = None) -> Program:
     )
 
 
+def save_preset_to_toml(
+    program: Program,
+    preset_index: int,
+    new_values: dict[str, int],
+    new_name: str | None = None,
+) -> None:
+    """Rewrite a single ``[[preset]]`` block in the program's TOML file.
+
+    Performs a surgical text-based edit to preserve comments, formatting,
+    and all other sections.  Only the target preset block is replaced.
+
+    Args:
+        program:      The loaded Program whose TOML file will be modified.
+        preset_index: Zero-based index of the preset to update.
+        new_values:   Sparse mapping of parameter_id → raw value.  Parameters
+                      whose value equals the program default are omitted from
+                      the written block to keep the TOML minimal.
+        new_name:     Optional new name for the preset.  ``None`` keeps the
+                      existing name.
+
+    Raises:
+        IndexError:     If *preset_index* is out of range.
+        FileNotFoundError: If the TOML file does not exist.
+    """
+    if preset_index < 0 or preset_index >= len(program.presets):
+        raise IndexError(
+            f"Preset index {preset_index} out of range "
+            f"(program has {len(program.presets)} presets)"
+        )
+
+    toml_path = program.toml_path
+    lines = toml_path.read_text(encoding="utf-8").splitlines(keepends=True)
+
+    # Locate all [[preset]] block boundaries (start line, exclusive end line).
+    preset_starts: list[int] = []
+    for i, line in enumerate(lines):
+        stripped = line.strip()
+        if stripped == "[[preset]]":
+            preset_starts.append(i)
+
+    if preset_index >= len(preset_starts):
+        raise IndexError(
+            f"Found only {len(preset_starts)} [[preset]] blocks in {toml_path}"
+        )
+
+    block_start  = preset_starts[preset_index]
+    if preset_index + 1 < len(preset_starts):
+        block_end = preset_starts[preset_index + 1]
+    else:
+        # Last preset — extends to EOF.  Trim any trailing blank lines so we
+        # can add our own clean ending.
+        block_end = len(lines)
+
+    # Build the replacement block
+    preset = program.presets[preset_index]
+    name   = new_name if new_name is not None else preset.name
+
+    new_block_lines = _build_preset_block(program, name, new_values)
+    sparse = _sparse_values(program, new_values)
+
+    # Splice into the file
+    new_lines = lines[:block_start] + new_block_lines + lines[block_end:]
+    toml_path.write_text("".join(new_lines), encoding="utf-8")
+
+    # Update the in-memory preset so the UI stays consistent
+    preset.name   = name
+    preset.values = sparse
+
+
+# SDK-defined maximum number of presets per program.
+# From vmprog_format.hpp: vmprog_program_config_v1_0::max_presets = 8.
+MAX_PRESETS = 8
+
+
+def _build_preset_block(
+    program: Program,
+    name: str,
+    values: dict[str, int],
+) -> list[str]:
+    """Build a ``[[preset]]`` TOML block as a list of text lines.
+
+    Only parameters that differ from the program defaults are written
+    (sparse representation matching the existing TOML convention).
+    """
+    _PARAM_ORDER = [
+        "rotary_potentiometer_1", "rotary_potentiometer_2",
+        "rotary_potentiometer_3", "rotary_potentiometer_4",
+        "rotary_potentiometer_5", "rotary_potentiometer_6",
+        "toggle_switch_7", "toggle_switch_8", "toggle_switch_9",
+        "toggle_switch_10", "toggle_switch_11",
+        "linear_potentiometer_12",
+    ]
+    sparse: dict[str, int] = {}
+    for param in program.parameters:
+        pid = param.parameter_id
+        if pid not in values:
+            continue
+        raw = values[pid]
+        if param.is_toggle:
+            default = 1 if param.initial_toggle_state else 0
+        else:
+            default = param.initial_pot_value
+        if raw != default:
+            sparse[pid] = raw
+
+    block: list[str] = ["[[preset]]\n", f'name = "{name}"\n']
+    for pid in _PARAM_ORDER:
+        if pid in sparse:
+            block.append(f"{pid} = {sparse[pid]}\n")
+    block.append("\n")
+    return block
+
+
+def add_preset_to_toml(
+    program: Program,
+    name: str,
+    values: dict[str, int],
+) -> int:
+    """Append a new ``[[preset]]`` block to the program's TOML file.
+
+    Args:
+        program: The loaded Program whose TOML file will be modified.
+        name:    Preset name (max 15 characters).
+        values:  Full mapping of parameter_id → raw value.
+
+    Returns:
+        The zero-based index of the newly added preset.
+
+    Raises:
+        ValueError:  If the program already has ``MAX_PRESETS`` presets.
+    """
+    if len(program.presets) >= MAX_PRESETS:
+        raise ValueError(
+            f"Cannot add preset: program already has the maximum of "
+            f"{MAX_PRESETS} presets (SDK limit)"
+        )
+    name = name[:15]  # enforce SDK name_max_length - 1
+
+    toml_path = program.toml_path
+    text = toml_path.read_text(encoding="utf-8")
+
+    # Ensure file ends with a newline before we append
+    if text and not text.endswith("\n"):
+        text += "\n"
+
+    block = _build_preset_block(program, name, values)
+    text += "".join(block)
+    toml_path.write_text(text, encoding="utf-8")
+
+    # Update in-memory model
+    sparse = {k: v for k, v in _sparse_values(program, values).items()}
+    new_preset = Preset(name=name, values=sparse)
+    program.presets.append(new_preset)
+    return len(program.presets) - 1
+
+
+def _sparse_values(program: Program, values: dict[str, int]) -> dict[str, int]:
+    """Return only the values that differ from program defaults."""
+    sparse: dict[str, int] = {}
+    for param in program.parameters:
+        pid = param.parameter_id
+        if pid not in values:
+            continue
+        raw = values[pid]
+        if param.is_toggle:
+            default = 1 if param.initial_toggle_state else 0
+        else:
+            default = param.initial_pot_value
+        if raw != default:
+            sparse[pid] = raw
+    return sparse
+
+
+def delete_preset_from_toml(
+    program: Program,
+    preset_index: int,
+) -> None:
+    """Remove a ``[[preset]]`` block from the program's TOML file.
+
+    Args:
+        program:      The loaded Program whose TOML file will be modified.
+        preset_index: Zero-based index of the preset to delete.
+
+    Raises:
+        IndexError: If *preset_index* is out of range.
+    """
+    if preset_index < 0 or preset_index >= len(program.presets):
+        raise IndexError(
+            f"Preset index {preset_index} out of range "
+            f"(program has {len(program.presets)} presets)"
+        )
+
+    toml_path = program.toml_path
+    lines = toml_path.read_text(encoding="utf-8").splitlines(keepends=True)
+
+    # Locate all [[preset]] block boundaries.
+    preset_starts: list[int] = []
+    for i, line in enumerate(lines):
+        if line.strip() == "[[preset]]":
+            preset_starts.append(i)
+
+    if preset_index >= len(preset_starts):
+        raise IndexError(
+            f"Found only {len(preset_starts)} [[preset]] blocks in {toml_path}"
+        )
+
+    block_start = preset_starts[preset_index]
+    if preset_index + 1 < len(preset_starts):
+        block_end = preset_starts[preset_index + 1]
+    else:
+        block_end = len(lines)
+
+    new_lines = lines[:block_start] + lines[block_end:]
+    toml_path.write_text("".join(new_lines), encoding="utf-8")
+
+    # Update in-memory model
+    del program.presets[preset_index]
+
+
+def save_defaults_to_toml(
+    program: Program,
+    values: dict[str, int],
+) -> None:
+    """Rewrite ``initial_value`` / ``initial_value_label`` fields in each
+    ``[[parameter]]`` block of the program's TOML file.
+
+    Performs a surgical text-based edit to preserve comments, formatting,
+    and all other sections.
+
+    Args:
+        program: The loaded Program whose TOML file will be modified.
+        values:  Full mapping of parameter_id → raw value (0–1023 for
+                 pots/faders, 0/1 for toggles).
+    """
+    toml_path = program.toml_path
+    lines = toml_path.read_text(encoding="utf-8").splitlines(keepends=True)
+
+    # Locate all [[parameter]] block boundaries.
+    param_starts: list[int] = []
+    for i, line in enumerate(lines):
+        if line.strip() == "[[parameter]]":
+            param_starts.append(i)
+
+    for block_idx, start in enumerate(param_starts):
+        # Find end of this parameter block.
+        if block_idx + 1 < len(param_starts):
+            block_end = param_starts[block_idx + 1]
+        else:
+            block_end = len(lines)
+            for j in range(start + 1, len(lines)):
+                if lines[j].strip().startswith("["):
+                    block_end = j
+                    break
+
+        # Identify the parameter_id.
+        pid = None
+        for j in range(start, block_end):
+            m = re.match(r'parameter_id\s*=\s*"([^"]+)"', lines[j].strip())
+            if m:
+                pid = m.group(1)
+                break
+
+        if pid is None or pid not in values:
+            continue
+
+        raw = values[pid]
+        param = next(
+            (p for p in program.parameters if p.parameter_id == pid), None
+        )
+        if param is None:
+            continue
+
+        if param.is_toggle:
+            if len(param.value_labels) >= 2:
+                label = param.value_labels[1] if raw else param.value_labels[0]
+            else:
+                label = "On" if raw else "Off"
+            for j in range(start, block_end):
+                if lines[j].strip().startswith("initial_value_label"):
+                    lines[j] = f'initial_value_label = "{label}"\n'
+                    break
+        else:
+            for j in range(start, block_end):
+                stripped = lines[j].strip()
+                if (
+                    stripped.startswith("initial_value")
+                    and not stripped.startswith("initial_value_label")
+                ):
+                    lines[j] = f"initial_value = {raw}\n"
+                    break
+
+    toml_path.write_text("".join(lines), encoding="utf-8")
+
+    # Update the in-memory Parameter objects.
+    for param in program.parameters:
+        pid = param.parameter_id
+        if pid not in values:
+            continue
+        raw = values[pid]
+        if param.is_toggle:
+            if len(param.value_labels) >= 2:
+                param.initial_value_label = (
+                    param.value_labels[1] if raw else param.value_labels[0]
+                )
+            else:
+                param.initial_value_label = "On" if raw else "Off"
+            param.initial_value = 1023 if raw else 0
+        else:
+            param.initial_value = raw
+
+
 def list_programs(programs_root: Path | None = None) -> list[str]:
     """Return sorted list of program directory names that have a matching TOML file.
 

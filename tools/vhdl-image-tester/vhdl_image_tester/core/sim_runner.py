@@ -14,9 +14,11 @@ Pipeline:
 
 from __future__ import annotations
 
+import os
 import re
 import shutil
 import subprocess
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Callable
 
@@ -37,6 +39,118 @@ _TOP_ENTITY = "tb_vit"
 
 LogCallback = Callable[[str], None]
 ProgressCallback = Callable[[int, int], None]  # (current_frame, total_frames)
+
+
+# ---------------------------------------------------------------------------
+# GHDL backend detection
+# ---------------------------------------------------------------------------
+
+@dataclass(frozen=True)
+class GhdlInfo:
+    """Describes the resolved GHDL installation."""
+    path: str               # absolute path to the ghdl binary
+    version: str            # first line of --version output
+    backend: str            # "llvm", "gcc", or "mcode"
+    is_compiled: bool       # True for llvm/gcc (native-code) backends
+
+
+def _detect_backend(version_output: str) -> str:
+    """Parse the GHDL backend from its ``--version`` output.
+
+    Examples of the code-generator line:
+        ``llvm 18.1.8 code generator``
+        ``mcode JIT code generator``
+        ``GCC 13.3.0 code generator``
+    """
+    for line in version_output.splitlines():
+        low = line.strip().lower()
+        if "llvm" in low and "code generator" in low:
+            return "llvm"
+        if "gcc" in low and "code generator" in low:
+            return "gcc"
+        if "mcode" in low and "code generator" in low:
+            return "mcode"
+    return "mcode"  # conservative fallback
+
+
+def _probe_ghdl(path: str) -> GhdlInfo | None:
+    """Run ``<path> --version`` and return a `GhdlInfo`, or *None* on failure."""
+    try:
+        result = subprocess.run(
+            [path, "--version"],
+            capture_output=True, text=True, timeout=5,
+        )
+        if result.returncode != 0:
+            return None
+        version = result.stdout.splitlines()[0] if result.stdout else "unknown"
+        backend = _detect_backend(result.stdout)
+        return GhdlInfo(
+            path=path,
+            version=version,
+            backend=backend,
+            is_compiled=(backend in ("llvm", "gcc")),
+        )
+    except Exception:  # noqa: BLE001
+        return None
+
+
+def _resolve_ghdl() -> GhdlInfo:
+    """Find the best available GHDL binary.
+
+    Selection order (first match wins):
+      1. ``LZX_VIT_GHDL`` environment variable (explicit override).
+      2. ``ghdl-llvm`` on ``PATH``  — compiled backend, fastest.
+      3. ``ghdl-gcc``  on ``PATH``  — compiled backend.
+      4. ``ghdl``      on ``PATH``  — whatever backend it was built with.
+
+    Returns
+    -------
+    GhdlInfo
+        Metadata about the resolved GHDL installation.
+
+    Raises
+    ------
+    RuntimeError
+        If no usable GHDL binary can be found.
+    """
+    # 1. Explicit override
+    env_ghdl = os.environ.get("LZX_VIT_GHDL")
+    if env_ghdl:
+        info = _probe_ghdl(env_ghdl)
+        if info is not None:
+            return info
+        raise RuntimeError(
+            f"LZX_VIT_GHDL is set to {env_ghdl!r} but it is not a usable GHDL binary."
+        )
+
+    # 2–4. Probe candidates in preference order
+    for candidate in ("ghdl-llvm", "ghdl-gcc", "ghdl"):
+        binary = shutil.which(candidate)
+        if binary is not None:
+            info = _probe_ghdl(binary)
+            if info is not None:
+                return info
+
+    raise RuntimeError(
+        "GHDL not found on PATH.\n"
+        "For best performance install the LLVM backend:\n"
+        "  Ubuntu/Debian:  sudo apt install ghdl-llvm\n"
+        "  macOS:          brew install ghdl    (includes LLVM on Apple Silicon)\n"
+        "  Any platform:   download OSS CAD Suite from\n"
+        "                  https://github.com/YosysHQ/oss-cad-suite-build/releases"
+    )
+
+
+# Module-level cache so we probe only once per process.
+_cached_ghdl_info: GhdlInfo | None = None
+
+
+def _get_ghdl_info() -> GhdlInfo:
+    """Return (and cache) the resolved GHDL installation info."""
+    global _cached_ghdl_info  # noqa: PLW0603
+    if _cached_ghdl_info is None:
+        _cached_ghdl_info = _resolve_ghdl()
+    return _cached_ghdl_info
 
 
 # ---------------------------------------------------------------------------
@@ -246,7 +360,8 @@ def run_simulation(
     ------
     RuntimeError    : If GHDL is not found or if any step fails.
     """
-    ghdl = _require_ghdl()
+    ghdl_info = _get_ghdl_info()
+    ghdl = ghdl_info.path
     build_dir.mkdir(parents=True, exist_ok=True)
 
     workdir_flag = f"--workdir={build_dir}"
@@ -256,7 +371,12 @@ def run_simulation(
     program_sources = _ordered_program_sources(program_dir)
     all_sources     = sdk_sources + program_sources + [testbench_path]
 
+    backend_label = f"{ghdl_info.backend} backend"
+    if ghdl_info.is_compiled:
+        backend_label += " (compiled — fast)"
     _log(log_callback, f"=== GHDL simulation — {len(all_sources)} source files ===")
+    _log(log_callback, f"    GHDL: {ghdl_info.version}")
+    _log(log_callback, f"    Backend: {backend_label}")
 
     # ── Step 1: Analyse ──────────────────────────────────────────────────────
     _log(log_callback, "\n[1/3] Analysing VHDL sources...")
@@ -267,7 +387,12 @@ def run_simulation(
 
     # ── Step 2: Elaborate ────────────────────────────────────────────────────
     _log(log_callback, "\n[2/3] Elaborating testbench...")
-    elab_cmd = [ghdl, "-e", _GHDL_STD, workdir_flag, _TOP_ENTITY]
+    elab_cmd = [ghdl, "-e", _GHDL_STD, workdir_flag]
+    # LLVM and GCC backends support optimisation flags — compile the
+    # elaborated design at -O2 for significantly faster simulation.
+    if ghdl_info.is_compiled:
+        elab_cmd.append("-O2")
+    elab_cmd.append(_TOP_ENTITY)
     _run(elab_cmd, build_dir, log_callback, description="elaborate tb_vit")
 
     # ── Step 3: Run ──────────────────────────────────────────────────────────
@@ -287,16 +412,6 @@ def run_simulation(
 def _log(cb: LogCallback | None, msg: str) -> None:
     if cb is not None:
         cb(msg)
-
-
-def _require_ghdl() -> str:
-    ghdl = shutil.which("ghdl")
-    if ghdl is None:
-        raise RuntimeError(
-            "GHDL not found on PATH.\n"
-            "Install via: sudo apt install ghdl  or  brew install ghdl"
-        )
-    return ghdl
 
 
 _RE_VIT_FRAME = re.compile(r"VIT_FRAME:\s*(\d+)/(\d+)")
@@ -361,17 +476,14 @@ def _run(
     return full_output
 
 
-def check_ghdl_available() -> tuple[bool, str]:
-    """Return (available, version_string) for the installed GHDL."""
-    ghdl = shutil.which("ghdl")
-    if ghdl is None:
-        return False, "not found"
+def check_ghdl_available() -> tuple[bool, str, str]:
+    """Return (available, version_string, backend) for the installed GHDL.
+
+    The resolver automatically prefers ``ghdl-llvm`` > ``ghdl-gcc`` > ``ghdl``
+    so the returned info reflects the fastest backend found.
+    """
     try:
-        result = subprocess.run(
-            [ghdl, "--version"],
-            capture_output=True, text=True, timeout=5
-        )
-        first_line = result.stdout.splitlines()[0] if result.stdout else "unknown"
-        return True, first_line
-    except Exception as exc:  # noqa: BLE001
-        return False, str(exc)
+        info = _resolve_ghdl()
+        return True, info.version, info.backend
+    except RuntimeError:
+        return False, "not found", "none"

@@ -10,22 +10,28 @@ Part of the [Videomancer SDK](https://github.com/lzxindustries/videomancer-sdk).
 
 ### GHDL
 
-GHDL is the VHDL simulator used to run programs. The recommended installation is via the **OSS CAD Suite** bundle (already used by the SDK build system):
+GHDL is the VHDL simulator used to run programs. **The LLVM backend is strongly recommended** — it compiles VHDL to native machine code and is typically **5–20× faster** than the default mcode (interpreter) backend. The tool automatically prefers `ghdl-llvm` when it is installed.
 
 ```bash
-# Option A — OSS CAD Suite (recommended, same toolchain as the SDK build)
+# Option A — LLVM backend via system package (recommended — fastest)
+# Ubuntu/Debian:
+sudo apt install ghdl-llvm
+
+# Option B — OSS CAD Suite (same toolchain as the SDK build system)
 # Download the latest release from https://github.com/YosysHQ/oss-cad-suite-build/releases
 # Then add it to your PATH before running the tester:
 export PATH="/path/to/oss-cad-suite/bin:$PATH"
 
-# Option B — system package (Ubuntu/Debian)
-sudo apt install ghdl
-
-# Option C — macOS via Homebrew
+# Option C — macOS via Homebrew (includes LLVM on Apple Silicon)
 brew install ghdl
+
+# Option D — mcode backend (works, but slow for batch rendering)
+sudo apt install ghdl
 ```
 
 Verify: `ghdl --version` (must report ≥ 3.0).
+
+The tool resolves the GHDL binary in this order: `LZX_VIT_GHDL` env var → `ghdl-llvm` → `ghdl-gcc` → `ghdl`. Set `LZX_VIT_GHDL=/path/to/ghdl-llvm` to force a specific binary.
 
 ### Python
 
@@ -316,6 +322,7 @@ Override the programs directory with the `LZX_VIT_PROGRAMS_DIR` environment vari
 |---|---|---|
 | `LZX_VIT_BUILD_DIR` | `/tmp/lzx_vit` | GHDL working directory |
 | `LZX_VIT_PROGRAMS_DIR` | `<repo>/programs` | Programs source directory |
+| `LZX_VIT_GHDL` | (auto-detect) | Force a specific GHDL binary path (e.g. `/usr/bin/ghdl-llvm`) |
 
 ---
 
@@ -435,11 +442,12 @@ Options:
 
 | Symptom | Likely cause | Fix |
 |---------|--------------|-----|
-| `ghdl: command not found` | GHDL not on PATH | Add OSS CAD Suite to PATH, or install GHDL separately |
+| `ghdl: command not found` | GHDL not on PATH | `sudo apt install ghdl-llvm` (recommended) or add OSS CAD Suite to PATH |
 | `Cannot locate Videomancer repository root` | Tool run outside repo tree | Run from within the Videomancer repository |
 | `No programs found` | `programs/` directory empty or missing | Ensure you are running from a full Videomancer repo checkout |
 | `ModuleNotFoundError: PyQt6` | Dependencies not installed | Run `./run.sh --install` (or `run.bat --install`) |
 | Simulation hangs | Program requires many warmup frames | Increase **Warmup frames** in settings |
+| Simulation very slow | Using mcode backend | Install LLVM backend: `sudo apt install ghdl-llvm` (5–20× speedup) |
 
 ---
 

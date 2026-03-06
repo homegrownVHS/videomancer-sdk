@@ -49,7 +49,13 @@ from PyQt6.QtWidgets import (
 )
 
 from ..core.pipeline import PipelineResult, SimulationWorker
-from ..core.program_loader import Program
+from ..core.program_loader import (
+    Program,
+    add_preset_to_toml,
+    delete_preset_from_toml,
+    save_defaults_to_toml,
+    save_preset_to_toml,
+)
 from ..core.sim_runner import check_ghdl_available
 from .widgets.image_viewer import ImageViewer
 from .widgets.log_panel import LogPanel
@@ -126,14 +132,15 @@ class MainWindow(QMainWindow):
         reg_header = QHBoxLayout()
         reg_header.addWidget(QLabel("<b>Control Registers</b>"))
         reg_header.addStretch()
-        reset_btn = QPushButton("Reset to Defaults")
-        reset_btn.clicked.connect(self._on_reset_registers)
-        reg_header.addWidget(reset_btn)
         reg_inner.addLayout(reg_header)
 
         self._register_panel = RegisterPanel()
         self._register_panel.registers_changed.connect(self._on_registers_changed)
         self._register_panel.preset_loaded.connect(self._on_preset_loaded)
+        self._register_panel.save_preset_requested.connect(self._on_save_preset)
+        self._register_panel.new_preset_requested.connect(self._on_new_preset)
+        self._register_panel.delete_preset_requested.connect(self._on_delete_preset)
+        self._register_panel.save_defaults_requested.connect(self._on_save_defaults)
         reg_inner.addWidget(self._register_panel)
 
         reg_tab.addTab(reg_widget, "Registers")
@@ -353,16 +360,31 @@ class MainWindow(QMainWindow):
         QTimer.singleShot(100, self._do_check_ghdl)
 
     def _do_check_ghdl(self) -> None:
-        ok, version = check_ghdl_available()
+        ok, version, backend = check_ghdl_available()
         if ok:
-            self._ghdl_lbl.setText(f"✓ {version}")
-            self._ghdl_lbl.setStyleSheet("color: #5c5; font-size: 11px;")
+            badge = f"✓ {version} [{backend}]"
+            self._ghdl_lbl.setText(badge)
+            if backend in ("llvm", "gcc"):
+                self._ghdl_lbl.setStyleSheet("color: #5c5; font-size: 11px;")
+            else:
+                # mcode works but is slower — amber hint
+                self._ghdl_lbl.setStyleSheet("color: #cc5; font-size: 11px;")
+                self._log_panel.append(
+                    "[INFO] GHDL is using the mcode (interpreter) backend.\n"
+                    "For 5–20× faster simulation install the LLVM backend:\n"
+                    "  Ubuntu/Debian:  sudo apt install ghdl-llvm\n"
+                    "  macOS:          brew install ghdl\n"
+                )
         else:
             self._ghdl_lbl.setText("✗ GHDL not found")
             self._ghdl_lbl.setStyleSheet("color: #c55; font-size: 11px;")
             self._log_panel.append(
                 "[WARNING] GHDL not found on PATH.\n"
-                "Install via:  sudo apt install ghdl   or   brew install ghdl\n"
+                "For best performance install the LLVM backend:\n"
+                "  Ubuntu/Debian:  sudo apt install ghdl-llvm\n"
+                "  macOS:          brew install ghdl\n"
+                "  Any platform:   download OSS CAD Suite from\n"
+                "                  https://github.com/YosysHQ/oss-cad-suite-build/releases\n"
                 "Simulation will fail without GHDL."
             )
 
@@ -413,14 +435,87 @@ class MainWindow(QMainWindow):
     def _on_registers_changed(self, values: dict[str, int]) -> None:
         self._register_values = values
 
-    @pyqtSlot()
-    def _on_reset_registers(self) -> None:
-        self._register_panel.reset_to_defaults()
-
     @pyqtSlot(str)
     def _on_preset_loaded(self, name: str) -> None:
         self._register_values = self._register_panel.current_values
         self._log_panel.append(f"── Preset loaded: {name} ──")
+
+    @pyqtSlot(int, dict, str)
+    def _on_save_preset(self, preset_index: int, values: dict, name: str) -> None:
+        if self._current_program is None:
+            return
+        try:
+            save_preset_to_toml(self._current_program, preset_index, values, name)
+            self._log_panel.append(
+                f'── Preset saved: "{name}" → {self._current_program.toml_path.name} ──'
+            )
+            self._status_lbl.setText(f'Preset "{name}" saved')
+        except Exception as exc:  # noqa: BLE001
+            self._log_panel.append(f"[ERROR] Failed to save preset: {exc}")
+            QMessageBox.warning(self, "Save Failed", f"Could not save preset:\n{exc}")
+
+    @pyqtSlot(dict)
+    def _on_save_defaults(self, values: dict) -> None:
+        if self._current_program is None:
+            return
+        try:
+            save_defaults_to_toml(self._current_program, values)
+            self._log_panel.append(
+                f"── Default settings saved → "
+                f"{self._current_program.toml_path.name} ──"
+            )
+            self._status_lbl.setText("Default settings saved")
+        except Exception as exc:  # noqa: BLE001
+            self._log_panel.append(f"[ERROR] Failed to save defaults: {exc}")
+            QMessageBox.warning(
+                self, "Save Failed", f"Could not save default settings:\n{exc}"
+            )
+
+    @pyqtSlot(str, dict)
+    def _on_new_preset(self, name: str, values: dict) -> None:
+        if self._current_program is None:
+            return
+        try:
+            idx = add_preset_to_toml(self._current_program, name, values)
+            self._register_panel.reload_presets_after_add(idx)
+            self._log_panel.append(
+                f'── New preset "{name}" added to '
+                f'{self._current_program.toml_path.name} ──'
+            )
+            self._status_lbl.setText(f'Preset "{name}" created')
+        except Exception as exc:  # noqa: BLE001
+            self._log_panel.append(f"[ERROR] Failed to add preset: {exc}")
+            QMessageBox.warning(self, "New Preset Failed", f"Could not add preset:\n{exc}")
+
+    @pyqtSlot(int)
+    def _on_delete_preset(self, preset_index: int) -> None:
+        if self._current_program is None:
+            return
+        if preset_index < 0 or preset_index >= len(self._current_program.presets):
+            return
+        name = self._current_program.presets[preset_index].name
+        reply = QMessageBox.question(
+            self,
+            "Delete Preset",
+            f'Delete preset "{name}"?\n\nThis will modify the TOML file on disk.',
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+            QMessageBox.StandardButton.No,
+        )
+        if reply != QMessageBox.StandardButton.Yes:
+            return
+        try:
+            delete_preset_from_toml(self._current_program, preset_index)
+            self._register_panel.reload_presets_after_delete()
+            self._log_panel.append(
+                f'── Preset "{name}" deleted from '
+                f'{self._current_program.toml_path.name} ──'
+            )
+            self._status_lbl.setText(f'Preset "{name}" deleted')
+        except Exception as exc:  # noqa: BLE001
+            self._log_panel.append(f"[ERROR] Failed to delete preset: {exc}")
+            QMessageBox.warning(
+                self, "Delete Failed", f"Could not delete preset:\n{exc}"
+            )
 
     @pyqtSlot()
     def _on_generate(self) -> None:
