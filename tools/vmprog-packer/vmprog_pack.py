@@ -16,7 +16,7 @@ Usage:
 
 Input directory structure:
     input_dir/
-        program_config.bin          # Required: 7372 bytes
+        program_config.bin          # Required: 7712 bytes
         bitstreams/                 # Required directory
             sd_analog.bin           # Optional: SD analog bitstream
             sd_hdmi.bin             # Optional: SD HDMI bitstream

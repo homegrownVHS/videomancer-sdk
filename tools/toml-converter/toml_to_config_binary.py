@@ -790,7 +790,7 @@ def pack_program_config(config: Dict[str, Any]) -> bytes:
         config: Dictionary containing program configuration from TOML
 
     Returns:
-        7372 bytes of packed binary data
+        7712 bytes of packed binary data
     """
     data = bytearray()
 

@@ -593,7 +593,7 @@ for PROGRAM in $PROGRAMS; do
             cd tools/toml-converter
             python3 toml_to_config_binary.py "${PROJECT_ROOT}${PROGRAM}.toml" "${BUILD_ROOT}program_config.bin" --quiet
             cd ../..
-            echo -e "${GREEN}✓ Configuration binary created (7,372 bytes)${NC}"
+            echo -e "${GREEN}✓ Configuration binary created${NC}"
         fi
 
         # Copy program_config.bin to hardware-specific build directory
