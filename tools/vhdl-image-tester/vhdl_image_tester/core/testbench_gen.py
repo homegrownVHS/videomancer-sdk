@@ -92,6 +92,9 @@ architecture sim of tb_vit is
     constant C_H_BLANK_HALF    : natural := {h_blank_half};
     constant C_V_BLANK_HALF    : natural := {v_blank_half};
 
+    -- Total pixels to capture across all fields/frames
+    constant C_TOTAL_CAPTURE_PIXELS : natural := {total_captured_target};
+
     -- -----------------------------------------------------------------------
     -- DUT signals
     -- -----------------------------------------------------------------------
@@ -223,7 +226,7 @@ begin
             -- Capture when inside the active-video region of the capture frame
             -- and we have not yet collected a full frame of pixels.
             if v_capturing
-                and v_total_captured < C_IMG_WIDTH * C_IMG_HEIGHT
+                and v_total_captured < C_TOTAL_CAPTURE_PIXELS
                 and v_line_in_frame >= C_V_BLANK_HALF + 1
                 and v_line_in_frame <= C_V_BLANK_HALF + C_IMG_HEIGHT
                 and v_col_in_line   >= C_H_BLANK_HALF
@@ -271,6 +274,7 @@ def generate_testbench(
     warmup_frames:   int = SIM_WARMUP_FRAMES,
     h_blank_half:    int = 32,
     v_blank_half:    int = 4,
+    is_interlaced:   bool = False,
 ) -> None:
     """
     Generate tb_vit.vhd at *output_path*.
@@ -282,15 +286,34 @@ def generate_testbench(
     output_img_path  : Absolute path where the testbench writes output.txt.
     register_values  : 32-element list of 10-bit register values (ABI v1.0).
     img_width        : Active-video image width in pixels.
-    img_height       : Active-video image height in pixels.
+    img_height       : Active-video image height in pixels (full frame).
     clk_period_ns    : Simulation clock period in nanoseconds (default 10 -> 100 MHz).
     warmup_frames    : Output frames to skip before capture begins (default 2).
     h_blank_half     : Pixel offset from hsync falling edge to first active column.
     v_blank_half     : Line offset from vsync falling edge to first active line.
+    is_interlaced    : If True, stimulus delivers two fields per frame and the
+                       testbench captures field_height lines per vsync.
     """
     reg_inits = _build_register_inits(register_values)
 
-    total_frames = warmup_frames + 1  # warmup + capture frame
+    if is_interlaced:
+        # Each frame in the stimulus produces 2 vsyncs (top + bottom field).
+        # The testbench counts individual vsyncs.  We need:
+        #   - skip warmup_frames * 2 vsyncs (warmup_frames full frames)
+        #   - capture 2 vsyncs (1 full frame = top + bottom field)
+        field_height = img_height // 2
+        warmup_vsyncs = warmup_frames * 2
+        capture_vsyncs = 2
+        total_vsyncs = warmup_vsyncs + capture_vsyncs
+        # The testbench captures field_height rows per vsync, for 2 vsyncs
+        capture_height = field_height
+        total_captured_target = img_width * img_height  # both fields combined
+    else:
+        warmup_vsyncs = warmup_frames
+        capture_vsyncs = 1
+        total_vsyncs = warmup_vsyncs + capture_vsyncs
+        capture_height = img_height
+        total_captured_target = img_width * img_height
 
     content = _TB_TEMPLATE.format(
         clk_period_ns = clk_period_ns,
@@ -298,11 +321,12 @@ def generate_testbench(
         output_file   = str(output_img_path).replace("\\", "/"),
         reg_inits     = reg_inits,
         img_width     = img_width,
-        img_height    = img_height,
-        warmup_frames = warmup_frames,
-        total_frames  = total_frames,
+        img_height    = capture_height,
+        warmup_frames = warmup_vsyncs,
+        total_frames  = total_vsyncs,
         h_blank_half  = h_blank_half,
         v_blank_half  = v_blank_half,
+        total_captured_target = total_captured_target,
     )
 
     output_path.parent.mkdir(parents=True, exist_ok=True)

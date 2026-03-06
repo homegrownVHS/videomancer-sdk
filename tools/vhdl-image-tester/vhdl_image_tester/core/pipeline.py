@@ -31,10 +31,12 @@ from .config import (
     BUILD_DIR,
     SIM_WARMUP_FRAMES,
     SIM_CAPTURE_FRAMES,
-    SIM_MAX_IMAGE_DIM,
     SIM_CLK_PERIOD_NS,
-    SIM_DEFAULT_CONFIG,
+    SIM_DEFAULT_VIDEO_MODE,
+    SIM_DEFAULT_DECIMATION,
     SIM_DRAIN_LINES,
+    ABI_REG_VIDEO_TIMING,
+    resolve_video_settings,
 )
 from .image_converter import (
     prepare_image,
@@ -80,8 +82,8 @@ def run_pipeline(
     program:           Program,
     source_image:      Image.Image,
     register_values:   dict[str, int],
-    fpga_config:       str                    = SIM_DEFAULT_CONFIG,
-    max_image_dim:     int                    = SIM_MAX_IMAGE_DIM,
+    video_mode:        str                    = SIM_DEFAULT_VIDEO_MODE,
+    decimation:        int                    = SIM_DEFAULT_DECIMATION,
     warmup_frames:     int                    = SIM_WARMUP_FRAMES,
     capture_frames:    int                    = SIM_CAPTURE_FRAMES,
     log_callback:      Callable[[str], None]  = print,
@@ -97,8 +99,8 @@ def run_pipeline(
         program:         Loaded :class:`Program` metadata.
         source_image:    PIL RGB image to process.
         register_values: Mapping of ``parameter_id`` → raw 10-bit value (0–1023).
-        fpga_config:     FPGA configuration string (e.g. ``"sd_analog"``).
-        max_image_dim:   Maximum image dimension in pixels (resize limit).
+        video_mode:      Video standard key (e.g. ``"1080p2997"``).
+        decimation:      Resolution divisor (1, 2, 4, 8, 16, 32, 64).
         warmup_frames:   Frames driven before output capture begins.
         capture_frames:  Number of frames captured for output.
         log_callback:    Callable receiving log-line strings (default: ``print``).
@@ -114,6 +116,9 @@ def run_pipeline(
         log_callback(msg)
 
     try:
+        # ── Resolve video settings ───────────────────────────────────────────
+        vs = resolve_video_settings(video_mode, decimation)
+
         # ── Build directory ──────────────────────────────────────────────────
         run_dir = (build_dir or (BUILD_DIR / program.name))
         run_dir.mkdir(parents=True, exist_ok=True)
@@ -123,10 +128,14 @@ def run_pipeline(
         tb_path   = run_dir / "tb_vit.vhd"
 
         # ── 1. Prepare image ─────────────────────────────────────────────────
-        emit(f"[1/5] Preparing image (max dim {max_image_dim}px)...")
-        input_img = prepare_image(source_image, max_image_dim)
+        emit(
+            f"[1/5] Preparing image ({vs.sim_width}×{vs.sim_height} "
+            f"from {vs.native_width}×{vs.native_height} ÷{decimation}"
+            f"{' interlaced' if vs.is_interlaced else ''})..."
+        )
+        input_img = prepare_image(source_image, vs.sim_width, vs.sim_height)
         w, h = input_img.size
-        emit(f"      → {w}×{h} px")
+        emit(f"      → {w}×{h} px  config={vs.fpga_config}  timing_id={vs.timing_id}")
 
         # ── 2. Convert to YUV & write stimulus ──────────────────────────────
         emit(
@@ -139,6 +148,7 @@ def run_pipeline(
             warmup_frames  = warmup_frames,
             capture_frames = capture_frames,
             drain_lines    = SIM_DRAIN_LINES,
+            is_interlaced  = vs.is_interlaced,
         )
         write_stimulus_file(stimulus, stim_path)
         emit(f"      → {len(stimulus):,} clock cycles → {stim_path.name}")
@@ -146,6 +156,8 @@ def run_pipeline(
         # ── 3. Compute register array & generate testbench ───────────────────
         emit("[3/5] Generating VHDL testbench...")
         reg_array = program.build_register_array(register_values)
+        # Set ABI register 8 to the video timing ID
+        reg_array[ABI_REG_VIDEO_TIMING] = vs.timing_id
         generate_testbench(
             output_path     = tb_path,
             stimulus_path   = stim_path,
@@ -155,8 +167,10 @@ def run_pipeline(
             img_height      = h,
             clk_period_ns   = SIM_CLK_PERIOD_NS,
             warmup_frames   = warmup_frames,
+            is_interlaced   = vs.is_interlaced,
         )
-        emit(f"      → {tb_path.name} (output-sync capture, {w}×{h})")
+        mode_str = "interlaced" if vs.is_interlaced else "progressive"
+        emit(f"      → {tb_path.name} ({mode_str} capture, {w}×{h})")
         parts = [f"reg[{i}]={v}" for i, v in enumerate(reg_array[:12])]
         emit("      Registers: " + "  ".join(parts))
 
@@ -166,7 +180,7 @@ def run_pipeline(
             program_dir       = program.program_dir,
             testbench_path    = tb_path,
             build_dir         = run_dir,
-            config            = fpga_config,
+            config            = vs.fpga_config,
             core              = program.core,
             log_callback      = emit,
             progress_callback = progress_callback,
@@ -179,7 +193,10 @@ def run_pipeline(
                 f"Output file is empty or missing: {out_path}\n"
                 "The simulation may have produced no active-video output."
             )
-        output_img = read_output_file(out_path, w, h)
+        output_img = read_output_file(
+            out_path, w, h,
+            is_interlaced=vs.is_interlaced,
+        )
         emit(f"      → captured {out_path.stat().st_size // 8} pixels")
 
         result = PipelineResult(
@@ -232,8 +249,8 @@ def _make_simulation_worker_class() -> type:
             program:         Program,
             source_image:    Image.Image,
             register_values: dict[str, int],
-            fpga_config:     str = SIM_DEFAULT_CONFIG,
-            max_image_dim:   int = SIM_MAX_IMAGE_DIM,
+            video_mode:      str = SIM_DEFAULT_VIDEO_MODE,
+            decimation:      int = SIM_DEFAULT_DECIMATION,
             warmup_frames:   int = SIM_WARMUP_FRAMES,
             capture_frames:  int = SIM_CAPTURE_FRAMES,
         ) -> None:
@@ -241,8 +258,8 @@ def _make_simulation_worker_class() -> type:
             self._program         = program
             self._source_image    = source_image
             self._register_values = register_values
-            self._fpga_config     = fpga_config
-            self._max_image_dim   = max_image_dim
+            self._video_mode      = video_mode
+            self._decimation      = decimation
             self._warmup_frames   = warmup_frames
             self._capture_frames  = capture_frames
 
@@ -251,8 +268,8 @@ def _make_simulation_worker_class() -> type:
                 program           = self._program,
                 source_image      = self._source_image,
                 register_values   = self._register_values,
-                fpga_config       = self._fpga_config,
-                max_image_dim     = self._max_image_dim,
+                video_mode        = self._video_mode,
+                decimation        = self._decimation,
                 warmup_frames     = self._warmup_frames,
                 capture_frames    = self._capture_frames,
                 log_callback      = self.log_line.emit,

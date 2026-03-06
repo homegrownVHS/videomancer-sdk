@@ -10,7 +10,7 @@ All GUI features are available headlessly:
   lzx-vhdl-cli list           [--programs-dir DIR]
   lzx-vhdl-cli info  NAME     [--programs-dir DIR]
   lzx-vhdl-cli simulate NAME  [--programs-dir DIR] [--image PATH]
-                              [--config CONFIG] [--max-dim N]
+                              [--video-mode MODE] [--decimation N]
                               [--warmup-frames N] [--capture-frames N]
                               [--set KEY=VALUE ...] [--import-regs PATH]
                               [--output PATH] [--build-dir DIR]
@@ -33,10 +33,12 @@ from pathlib import Path
 
 from .core.config import (
     PROGRAMS_ROOT,
-    SIM_DEFAULT_CONFIG,
-    SIM_MAX_IMAGE_DIM,
+    SIM_DEFAULT_VIDEO_MODE,
+    SIM_DEFAULT_DECIMATION,
     SIM_WARMUP_FRAMES,
     SIM_CAPTURE_FRAMES,
+    VIDEO_MODE_KEYS,
+    DECIMATION_VALUES,
 )
 
 __all__ = ["main"]
@@ -241,8 +243,8 @@ def _cmd_simulate(args: argparse.Namespace) -> int:
         program         = prog,
         source_image    = source,
         register_values = regs,
-        fpga_config     = args.config,
-        max_image_dim   = args.max_dim,
+        video_mode      = args.video_mode,
+        decimation      = args.decimation,
         warmup_frames   = args.warmup_frames,
         capture_frames  = args.capture_frames,
         log_callback    = print,
@@ -314,12 +316,16 @@ def _build_parser() -> argparse.ArgumentParser:
         help=f"Override programs directory (default: {PROGRAMS_ROOT})",
     )
     p_sim.add_argument(
-        "--config", metavar="CONFIG", default=SIM_DEFAULT_CONFIG,
-        help=f"FPGA config string (default: {SIM_DEFAULT_CONFIG})",
+        "--video-mode", metavar="MODE", default=SIM_DEFAULT_VIDEO_MODE,
+        choices=VIDEO_MODE_KEYS,
+        help=f"Video standard (default: {SIM_DEFAULT_VIDEO_MODE}). "
+             f"Choices: {', '.join(VIDEO_MODE_KEYS)}",
     )
     p_sim.add_argument(
-        "--max-dim", metavar="N", type=int, default=SIM_MAX_IMAGE_DIM,
-        help=f"Maximum image dimension in pixels (default: {SIM_MAX_IMAGE_DIM})",
+        "--decimation", metavar="N", type=int, default=SIM_DEFAULT_DECIMATION,
+        choices=DECIMATION_VALUES,
+        help=f"Resolution decimation factor (default: {SIM_DEFAULT_DECIMATION}). "
+             f"Choices: {', '.join(str(d) for d in DECIMATION_VALUES)}",
     )
     p_sim.add_argument(
         "--warmup-frames", metavar="N", type=int, default=SIM_WARMUP_FRAMES,

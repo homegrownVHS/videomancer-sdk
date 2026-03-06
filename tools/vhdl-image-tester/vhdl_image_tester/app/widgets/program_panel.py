@@ -6,8 +6,9 @@
 ProgramPanel: composite widget for selecting:
   - FPGA program (dropdown populated from programs/)
   - Test image source (dropdown + browse, populated from docs/test_images/)
-  - FPGA config (sd_analog / hd_analog / etc.)
-  - Max image dimension (for sim speed vs accuracy trade-off)
+  - Video mode (15 ABI standards)
+  - Decimation (resolution divisor)
+  - Warmup frames (0+, with +/− buttons)
 """
 
 from __future__ import annotations
@@ -25,13 +26,21 @@ from PyQt6.QtWidgets import (
     QLabel,
     QPushButton,
     QSizePolicy,
-    QSlider,
     QSpinBox,
     QVBoxLayout,
     QWidget,
 )
 
-from ...core.config import FPGA_CONFIGS, PROGRAMS_ROOT, SIM_MAX_IMAGE_DIM, TEST_IMAGES_ROOT
+from ...core.config import (
+    DECIMATION_VALUES,
+    PROGRAMS_ROOT,
+    SIM_DEFAULT_DECIMATION,
+    SIM_DEFAULT_VIDEO_MODE,
+    TEST_IMAGES_ROOT,
+    VIDEO_MODES,
+    VIDEO_MODE_KEYS,
+    resolve_video_settings,
+)
 from ...core.image_converter import collect_test_images
 from ...core.program_loader import Program, list_programs, load_program
 from .combo_fix import fix_combo_popup
@@ -86,12 +95,12 @@ class ProgramPanel(QWidget):
         return self._custom_image_path
 
     @property
-    def fpga_config(self) -> str:
-        return self._config_combo.currentText()
+    def video_mode(self) -> str:
+        return self._video_mode_combo.currentData()
 
     @property
-    def max_image_dim(self) -> int:
-        return self._dim_spin.value()
+    def decimation(self) -> int:
+        return self._decimation_combo.currentData()
 
     @property
     def warmup_frames(self) -> int:
@@ -181,31 +190,65 @@ class ProgramPanel(QWidget):
         sim_form = QFormLayout(sim_group)
         sim_form.setLabelAlignment(Qt.AlignmentFlag.AlignRight)
 
-        self._config_combo = QComboBox()
-        for cfg in FPGA_CONFIGS:
-            self._config_combo.addItem(cfg)
-        fix_combo_popup(self._config_combo)
-        sim_form.addRow("FPGA config:", self._config_combo)
+        self._video_mode_combo = QComboBox()
+        default_idx = 0
+        for i, key in enumerate(VIDEO_MODE_KEYS):
+            mode = VIDEO_MODES[key]
+            self._video_mode_combo.addItem(mode.display_name, key)
+            if key == SIM_DEFAULT_VIDEO_MODE:
+                default_idx = i
+        self._video_mode_combo.setCurrentIndex(default_idx)
+        self._video_mode_combo.currentIndexChanged.connect(self._on_video_settings_changed)
+        fix_combo_popup(self._video_mode_combo)
+        sim_form.addRow("Video mode:", self._video_mode_combo)
 
-        self._dim_spin = QSpinBox()
-        self._dim_spin.setRange(64, 1920)
-        self._dim_spin.setSingleStep(64)
-        self._dim_spin.setValue(SIM_MAX_IMAGE_DIM)
-        self._dim_spin.setSuffix(" px")
-        self._dim_spin.setToolTip(
-            "Maximum image dimension for simulation.\n"
-            "Smaller = faster simulation; larger = more faithful result."
-        )
-        sim_form.addRow("Max image dim:", self._dim_spin)
+        self._decimation_combo = QComboBox()
+        default_dec_idx = 0
+        for i, d in enumerate(DECIMATION_VALUES):
+            self._decimation_combo.addItem(f"÷{d}", d)
+            if d == SIM_DEFAULT_DECIMATION:
+                default_dec_idx = i
+        self._decimation_combo.setCurrentIndex(default_dec_idx)
+        self._decimation_combo.currentIndexChanged.connect(self._on_video_settings_changed)
+        fix_combo_popup(self._decimation_combo)
+        sim_form.addRow("Decimation:", self._decimation_combo)
+
+        self._resolution_lbl = QLabel()
+        self._resolution_lbl.setStyleSheet("color: #8ab; font-size: 11px;")
+        sim_form.addRow("Resolution:", self._resolution_lbl)
+        self._update_resolution_label()
+
+        warmup_row = QHBoxLayout()
+        warmup_row.setContentsMargins(0, 0, 0, 0)
+        warmup_row.setSpacing(2)
+
+        self._warmup_minus = QPushButton("−")
+        self._warmup_minus.setFixedSize(24, 24)
+        self._warmup_minus.clicked.connect(lambda: self._warmup_spin.setValue(
+            max(0, self._warmup_spin.value() - 1)))
 
         self._warmup_spin = QSpinBox()
-        self._warmup_spin.setRange(1, 8)
+        self._warmup_spin.setRange(0, 99)
         self._warmup_spin.setValue(2)
         self._warmup_spin.setToolTip(
             "Number of frames driven before output capture begins.\n"
+            "0 = capture immediately (first frame).\n"
             "Increase for programs with deep pipeline delays."
         )
-        sim_form.addRow("Warmup frames:", self._warmup_spin)
+
+        self._warmup_plus = QPushButton("+")
+        self._warmup_plus.setFixedSize(24, 24)
+        self._warmup_plus.clicked.connect(lambda: self._warmup_spin.setValue(
+            min(99, self._warmup_spin.value() + 1)))
+
+        warmup_row.addWidget(self._warmup_minus)
+        warmup_row.addWidget(self._warmup_spin)
+        warmup_row.addWidget(self._warmup_plus)
+        warmup_row.addStretch()
+
+        warmup_container = QWidget()
+        warmup_container.setLayout(warmup_row)
+        sim_form.addRow("Warmup frames:", warmup_container)
 
         root.addWidget(sim_group)
         root.addStretch()
@@ -322,6 +365,33 @@ class ProgramPanel(QWidget):
         path = self.selected_image_path
         if path is not None:
             self.image_changed.emit(path)
+
+    def _on_video_settings_changed(self, _index: int = 0) -> None:
+        """Update the resolution label when video mode or decimation changes."""
+        self._update_resolution_label()
+
+    def _update_resolution_label(self) -> None:
+        """Compute and display the effective simulation resolution."""
+        mode_key = self._video_mode_combo.currentData()
+        dec = self._decimation_combo.currentData()
+        if mode_key is None or dec is None:
+            return
+        try:
+            vs = resolve_video_settings(mode_key, dec)
+            mode = VIDEO_MODES[mode_key]
+            interlaced_tag = " interlaced" if vs.is_interlaced else ""
+            self._resolution_lbl.setText(
+                f"{vs.sim_width}×{vs.sim_height}{interlaced_tag}  "
+                f"({vs.fpga_config})"
+            )
+            self._resolution_lbl.setToolTip(
+                f"Native: {mode.width}×{mode.height}\n"
+                f"Decimated ÷{dec}: {vs.sim_width}×{vs.sim_height}\n"
+                f"FPGA config: {vs.fpga_config}\n"
+                f"Timing ID: {vs.timing_id}"
+            )
+        except ValueError:
+            self._resolution_lbl.setText("—")
 
     def _update_folder_label(self) -> None:
         """Update the truncated folder path label and tooltip."""

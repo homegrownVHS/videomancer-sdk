@@ -440,8 +440,8 @@ class MainWindow(QMainWindow):
         self._log_panel.append(
             f"{'='*60}\n"
             f"  Generating: {self._current_program.display_name}\n"
-            f"  Config: {self._program_panel.fpga_config}   "
-            f"Max dim: {self._program_panel.max_image_dim}px\n"
+            f"  Video mode: {self._program_panel.video_mode}   "
+            f"Decimation: ÷{self._program_panel.decimation}\n"
             f"{'='*60}"
         )
         self._set_running(True, warmup_frames=self._program_panel.warmup_frames)
@@ -450,8 +450,8 @@ class MainWindow(QMainWindow):
             program         = self._current_program,
             source_image    = self._source_image,
             register_values = dict(self._register_values),
-            fpga_config     = self._program_panel.fpga_config,
-            max_image_dim   = self._program_panel.max_image_dim,
+            video_mode      = self._program_panel.video_mode,
+            decimation      = self._program_panel.decimation,
             warmup_frames   = self._program_panel.warmup_frames,
         )
         self._worker.log_line.connect(self._on_log_line)
@@ -618,7 +618,8 @@ class MainWindow(QMainWindow):
             export_data = {
                 "program": name,
                 "program_name": self._current_program.display_name,
-                "fpga_config": self._program_panel.fpga_config,
+                "video_mode": self._program_panel.video_mode,
+                "decimation": self._program_panel.decimation,
                 "registers": values,
                 "register_array": self._current_program.build_register_array(values),
             }

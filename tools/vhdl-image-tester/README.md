@@ -174,8 +174,8 @@ python -m vhdl_image_tester simulate cascade --image photo.png --output result.p
 |---|---|---|
 | `--image PATH` | (required) | Source image (PNG, JPEG, BMP, …) |
 | `--programs-dir DIR` | repo `programs/` | Override programs directory |
-| `--config CONFIG` | `sd_analog` | FPGA config string |
-| `--max-dim N` | 480 | Max image dimension (px) |
+| `--video-mode MODE` | `1080p2997` | Video standard (see table below) |
+| `--decimation N` | 4 | Resolution divisor (1, 2, 4, 8, 16, 32, 64) |
 | `--warmup-frames N` | 2 | Warmup frames before capture |
 | `--capture-frames N` | 1 | Output capture frames |
 | `--preset NAME` | — | Load a factory preset by name (from TOML `[[preset]]`) |
@@ -222,7 +222,7 @@ videomancer-sdk/tools/vhdl-image-tester/
 User selects program + image + register settings
         │
         ▼
-[1] Resize image to simulation dimensions (configurable max, default 480 px)
+[1] Resize image to simulation dimensions (native resolution ÷ decimation)
         │
         ▼
 [2] Convert RGB → BT.601 YUV-10bit
@@ -269,10 +269,31 @@ See [ABI Format](../../docs/abi-format.md) for the full specification.
 
 | Setting         | Default     | Notes                                          |
 |-----------------|-------------|------------------------------------------------|
-| FPGA config     | sd_analog   | `sd_analog` / `hd_analog` / etc.              |
-| Max image dim   | 480 px      | Resize limit; smaller = faster simulation      |
+| Video mode      | 1080p2997   | Any of the 15 ABI video standards; determines  |
+|                 |             | FPGA config, timing ID, and native resolution  |
+| Decimation      | ÷4          | Resolution divisor (1–64); smaller = faster    |
 | Warmup frames   | 2           | Frames driven before capture; increase for     |
 |                 |             | programs with deep line-delay pipelines        |
+
+### Video Modes
+
+| Key | Resolution | Interlaced | FPGA Config |
+|---|---|---|---|
+| `480i5994_composite` | 720×486 | Yes | sd_hdmi |
+| `480i5994_svideo` | 720×486 | Yes | sd_hdmi |
+| `480i5994_component` | 720×486 | Yes | sd_hdmi |
+| `480p5994` | 720×480 | No | sd_hdmi |
+| `576i50_composite` | 720×576 | Yes | sd_hdmi |
+| `576i50_svideo` | 720×576 | Yes | sd_hdmi |
+| `576i50_component` | 720×576 | Yes | sd_hdmi |
+| `576p50` | 720×576 | No | sd_hdmi |
+| `720p50` | 1280×720 | No | hd_hdmi |
+| `720p5994` | 1280×720 | No | hd_hdmi |
+| `720p60` | 1280×720 | No | hd_hdmi |
+| `1080p24` | 1920×1080 | No | hd_hdmi |
+| `1080p25` | 1920×1080 | No | hd_hdmi |
+| `1080p2997` | 1920×1080 | No | hd_hdmi |
+| `1080p30` | 1920×1080 | No | hd_hdmi |
 
 ---
 
@@ -352,7 +373,8 @@ them later with **Import Regs**. This lets you create reproducible test presets.
 {
   "program": "emboss",
   "program_name": "Emboss",
-  "fpga_config": "sd_analog",
+  "video_mode": "1080p2997",
+  "decimation": 4,
   "registers": {
     "rotary_potentiometer_1": 512,
     "toggle_switch_7": 1,
