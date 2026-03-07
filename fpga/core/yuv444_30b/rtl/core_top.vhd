@@ -97,6 +97,15 @@ architecture rtl of core_top is
   signal s_o_field_n : std_logic := '0';
   signal s_o_avid : std_logic := '0';
 
+  -- Sync reference signals for sync output generator.
+  -- In dual mode, references HDMI RX input timing (matching the Analog Enc
+  -- passthrough path). In other modes, references the program output timing
+  -- (matching the HDMI TX / Analog Enc output path).
+  signal s_sync_ref_hsync_n    : std_logic := '1';
+  signal s_sync_ref_vsync_n    : std_logic := '1';
+  signal s_hdmi_rx_hsync_meta  : std_logic := '1';
+  signal s_hdmi_rx_vsync_meta  : std_logic := '1';
+
   -- HD clock decimation signals
   signal prog_clk : std_logic := '0';
   signal s_prog_data_in : t_video_stream_yuv444_30b;
@@ -351,22 +360,49 @@ begin
       data_out => s_prog_data_out
     );
 
+  -- ========================================================================
+  -- SYNC OUTPUT REFERENCE SELECTION
+  -- ========================================================================
+  -- In dual mode, the Analog Enc receives HDMI RX passthrough data, so the
+  -- sync output must match the HDMI RX input timing. The HDMI RX sync
+  -- signals are in the i_hdmi_rx_clk domain; vid_clk is the genlock'd analog
+  -- decoder clock, so a 2FF synchronizer provides clean capture.
+  -- In all other modes, both outputs receive the program output, so the sync
+  -- output matches s_video_out timing directly.
+
+  GEN_SYNC_REF_PROGRAM_OUT : if not C_ENABLE_DUAL generate
+    s_sync_ref_hsync_n <= s_video_out.hsync_n;
+    s_sync_ref_vsync_n <= s_video_out.vsync_n;
+  end generate;
+
+  GEN_SYNC_REF_HDMI_RX : if C_ENABLE_DUAL generate
+    p_sync_ref_cdc : process(vid_clk)
+    begin
+      if rising_edge(vid_clk) then
+        s_hdmi_rx_hsync_meta <= i_hdmi_rx_hsync;
+        s_sync_ref_hsync_n   <= s_hdmi_rx_hsync_meta;
+        s_hdmi_rx_vsync_meta <= i_hdmi_rx_vsync;
+        s_sync_ref_vsync_n   <= s_hdmi_rx_vsync_meta;
+      end if;
+    end process;
+  end generate;
+
   video_field_detector_inst : entity work.video_field_detector
     generic map(
       G_LINE_COUNTER_WIDTH => 12
     )
     port map(
       clk => vid_clk,
-      hsync => s_video_out.hsync_n,
-      vsync => s_video_out.vsync_n,
+      hsync => s_sync_ref_hsync_n,
+      vsync => s_sync_ref_vsync_n,
       field_n => s_o_field_n
     );
 
   video_sync_generator_inst : entity work.video_sync_generator
     port map(
       clk => vid_clk,
-      ref_hsync => s_video_out.hsync_n,
-      ref_vsync => s_video_out.vsync_n,
+      ref_hsync => s_sync_ref_hsync_n,
+      ref_vsync => s_sync_ref_vsync_n,
       ref_field_n => s_o_field_n,
       timing => s_video_timing_id,
       trisync_p => s_o_trisync_out_p,
