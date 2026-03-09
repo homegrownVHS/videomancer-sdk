@@ -1,0 +1,2 @@
+       100000000 fs - default              -    INFO - Testing CS abort during data phase
+simulation stopped @17600ns with status 0

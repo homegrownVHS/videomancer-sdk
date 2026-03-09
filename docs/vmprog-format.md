@@ -9,7 +9,7 @@ Binary container for FPGA programs with Ed25519 signing.
 ```
 File Header (64 bytes) - Magic 'VMPG', version, size, flags
 Table of Contents - N × 64-byte entries with type, offset, size, hash
-Payloads - Config (7372 bytes), descriptor (332 bytes), signature (64 bytes), bitstreams
+Payloads - Config (7936 bytes), descriptor (332 bytes), signature (64 bytes), bitstreams
 ```
 
 ## TOC Entry Types
@@ -276,7 +276,7 @@ Configures one user-controllable parameter:
 
 ### 4.6 Program Configuration
 
-**Structure:** `vmprog_program_config_v1_0` (7372 bytes)
+**Structure:** `vmprog_program_config_v1_0` (7936 bytes)
 
 Main program metadata structure:
 
@@ -295,13 +295,17 @@ Main program metadata structure:
 | 86 | char[32] | program_name | 32 | Display name |
 | 118 | char[64] | author | 64 | Author name |
 | 182 | char[32] | license | 32 | License identifier |
-| 214 | char[32] | category | 32 | Program category |
-| 246 | char[128] | description | 128 | Program description |
-| 374 | char[128] | url | 128 | Project or documentation URL |
-| 502 | uint16_t | parameter_count | 2 | Number of parameters |
-| 504 | uint16_t | reserved_pad | 2 | Reserved padding |
-| 506 | param[12] | parameters | 6864 | Parameter configs (12×572) |
-| 7370 | uint8_t[2] | reserved | 2 | Reserved |
+| 214 | char[8][32] | categories | 256 | Category tag strings (up to 8×32) |
+| 470 | char[128] | description | 128 | Program description |
+| 598 | char[128] | url | 128 | Project or documentation URL |
+| 726 | uint16_t | parameter_count | 2 | Number of valid parameters |
+| 728 | uint8_t | preset_count | 1 | Number of valid factory presets |
+| 729 | uint8_t | category_count | 1 | Number of valid categories (1–8) |
+| 730 | param[12] | parameters | 6864 | Parameter configs (12×572) |
+| 7594 | preset[8] | presets | 320 | Factory presets (8×40) |
+| 7914 | uint16_t | supported_timings | 2 | Bitmask of supported video timings (0 = all) |
+| 7916 | uint8_t | program_type | 1 | Program type (0=processing, 1=synthesis) |
+| 7917 | uint8_t[19] | reserved | 19 | Reserved (zeros) |
 
 **Constants:**
 
@@ -310,10 +314,12 @@ Main program metadata structure:
 - `author_max_length` = 64
 - `license_max_length` = 32
 - `category_max_length` = 32
+- `max_categories` = 8
 - `description_max_length` = 128
 - `url_max_length` = 128
 - `num_parameters` = 12
-- `struct_size` = 7372
+- `max_presets` = 8
+- `struct_size` = 7936
 
 ---
 

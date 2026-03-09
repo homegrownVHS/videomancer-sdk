@@ -357,6 +357,8 @@ std::vector<uint8_t> create_mock_package_with_config() {
     safe_strncpy(config.program_name, "Mock Test Program", sizeof(config.program_name));
     safe_strncpy(config.author, "Test Author", sizeof(config.author));
     config.parameter_count = 0;
+    config.category_count = 1;
+    safe_strncpy(config.categories[0], "Render", sizeof(config.categories[0]));
 
     // Calculate config hash
     uint8_t config_hash[32];
@@ -396,6 +398,8 @@ std::vector<uint8_t> create_mock_package_with_signed_descriptor() {
     init_vmprog_config(config);
     safe_strncpy(config.program_id, "test.signed.package", sizeof(config.program_id));
     safe_strncpy(config.program_name, "Signed Test Program", sizeof(config.program_name));
+    config.category_count = 1;
+    safe_strncpy(config.categories[0], "Render", sizeof(config.categories[0]));
 
     // Create signed descriptor
     vmprog_signed_descriptor_v1_0 descriptor;

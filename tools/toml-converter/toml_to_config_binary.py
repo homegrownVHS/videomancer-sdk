@@ -14,7 +14,7 @@ Usage:
 Structure sizes (bytes):
     - vmprog_parameter_config_v1_0: 572 bytes
     - vmprog_preset_config_v1_0: 40 bytes
-    - vmprog_program_config_v1_0: 7712 bytes
+    - vmprog_program_config_v1_0: 7936 bytes
 """
 
 import struct
@@ -46,6 +46,7 @@ PROGRAM_NAME_MAX_LENGTH = 32
 AUTHOR_MAX_LENGTH = 64
 LICENSE_MAX_LENGTH = 32
 CATEGORY_MAX_LENGTH = 32
+MAX_CATEGORIES = 8
 DESCRIPTION_MAX_LENGTH = 128
 URL_MAX_LENGTH = 128
 NUM_PARAMETERS = 12
@@ -53,7 +54,12 @@ MAX_PRESETS = 8
 PRESET_NAME_MAX_LENGTH = 16
 PRESET_NUM_VALUES = 12
 PRESET_STRUCT_SIZE = 40
-CONFIG_STRUCT_SIZE = 7712
+CONFIG_STRUCT_SIZE = 7936
+
+PROGRAM_TYPE_MAP = {
+    'processing': 0,
+    'synthesis': 1,
+}
 
 # Enum value bounds
 MAX_PARAMETER_ID = 12  # linear_potentiometer_12
@@ -762,7 +768,7 @@ def pack_program_config(config: Dict[str, Any]) -> bytes:
     """
     Pack a complete program configuration into binary format.
 
-    Structure layout (7712 bytes):
+    Structure layout (7936 bytes):
         - program_id: char[64] (64 bytes)
         - program_version_major: uint16_t (2 bytes)
         - program_version_minor: uint16_t (2 bytes)
@@ -772,25 +778,27 @@ def pack_program_config(config: Dict[str, Any]) -> bytes:
         - abi_max_major: uint16_t (2 bytes)
         - abi_max_minor: uint16_t (2 bytes)
         - hw_mask: uint32_t (4 bytes) - built from hardware_compatibility array
+        - core_id: uint32_t (4 bytes) - core architecture identifier
         - program_name: char[32] (32 bytes)
         - author: char[64] (64 bytes)
         - license: char[32] (32 bytes)
-        - category: char[32] (32 bytes)
+        - categories: char[8][32] (256 bytes)
         - description: char[128] (128 bytes)
         - url: char[128] (128 bytes)
         - parameter_count: uint16_t (2 bytes)
         - preset_count: uint8_t (1 byte)
-        - reserved_pad: uint8_t (1 byte)
+        - category_count: uint8_t (1 byte)
         - parameters: vmprog_parameter_config_v1_0[12] (6864 bytes)
         - presets: vmprog_preset_config_v1_0[8] (320 bytes)
         - supported_timings: uint16_t (2 bytes) - bitmask of supported video timing IDs
-        - reserved: uint8_t[20] (20 bytes)
+        - program_type: uint8_t (1 byte) - 0=processing, 1=synthesis
+        - reserved: uint8_t[19] (19 bytes)
 
     Args:
         config: Dictionary containing program configuration from TOML
 
     Returns:
-        7712 bytes of packed binary data
+        7936 bytes of packed binary data
     """
     data = bytearray()
 
@@ -859,7 +867,20 @@ def pack_program_config(config: Dict[str, Any]) -> bytes:
     data += pack_string(program.get('program_name', ''), PROGRAM_NAME_MAX_LENGTH)
     data += pack_string(program.get('author', ''), AUTHOR_MAX_LENGTH)
     data += pack_string(program.get('license', ''), LICENSE_MAX_LENGTH)
-    data += pack_string(program.get('category', ''), CATEGORY_MAX_LENGTH)
+
+    # Categories (256 bytes = 8 × 32)
+    categories = program.get('categories', [])
+    # Backward compatibility: fall back to single 'category' field
+    if not categories and 'category' in program:
+        cat = program['category']
+        categories = [cat] if cat else []
+    category_count = min(len(categories), MAX_CATEGORIES)
+    for i in range(MAX_CATEGORIES):
+        if i < len(categories):
+            data += pack_string(categories[i], CATEGORY_MAX_LENGTH)
+        else:
+            data += b'\x00' * CATEGORY_MAX_LENGTH
+
     data += pack_string(program.get('description', ''), DESCRIPTION_MAX_LENGTH)
 
     # URL field (128 bytes)
@@ -872,7 +893,7 @@ def pack_program_config(config: Dict[str, Any]) -> bytes:
     preset_count = min(len(presets), MAX_PRESETS)
     data += struct.pack('<H', parameter_count)
     data += struct.pack('<B', preset_count)  # preset_count (uint8_t)
-    data += struct.pack('<B', 0)  # reserved_pad (uint8_t)
+    data += struct.pack('<B', category_count)  # category_count (uint8_t)
 
     # Pack parameter array (6864 bytes = 12 * 572)
     for i in range(NUM_PARAMETERS):
@@ -896,8 +917,13 @@ def pack_program_config(config: Dict[str, Any]) -> bytes:
         timing_mask |= (1 << timing_id)
     data += struct.pack('<H', timing_mask)
 
-    # Reserved (20 bytes)
-    data += b'\x00' * 20
+    # Program type (1 byte) - 0=processing, 1=synthesis
+    program_type_str = program.get('program_type', 'processing')
+    program_type_val = PROGRAM_TYPE_MAP.get(program_type_str, 0)
+    data += struct.pack('<B', program_type_val)
+
+    # Reserved (19 bytes)
+    data += b'\x00' * 19
 
     assert len(data) == CONFIG_STRUCT_SIZE, f"Config size mismatch: {len(data)} != {CONFIG_STRUCT_SIZE}"
     return bytes(data)

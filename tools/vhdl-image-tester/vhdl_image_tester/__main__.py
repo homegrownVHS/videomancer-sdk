@@ -40,6 +40,36 @@ def _wants_cli() -> bool:
     return False
 
 
+def _parse_gui_args() -> dict[str, object]:
+    """Parse optional GUI pre-configuration arguments.
+
+    Returns a dict with keys matching ``MainWindow.__init__`` keyword args.
+    """
+    import argparse
+
+    parser = argparse.ArgumentParser(
+        prog="lzx-vhdl-tester",
+        description="LZX VHDL Image Tester GUI",
+        add_help=False,  # avoid conflict with Qt's own --help
+    )
+    parser.add_argument("--program", "-p", type=str, default=None,
+                        help="Pre-select a program by name")
+    parser.add_argument("--image", "-i", type=str, default=None,
+                        help="Pre-select a source image file path")
+    parser.add_argument("--video-mode", "-m", type=str, default=None,
+                        help="Pre-select video mode (e.g. 1080p30, ntsc)")
+    parser.add_argument("--decimation", "-d", type=int, default=None,
+                        help="Pre-select decimation factor (1,2,4,8,16,32,64)")
+    # Parse known args only — Qt may add its own flags.
+    ns, _remaining = parser.parse_known_args()
+    return {
+        "initial_program":    ns.program,
+        "initial_image":      ns.image,
+        "initial_video_mode": ns.video_mode,
+        "initial_decimation":  ns.decimation,
+    }
+
+
 def main() -> None:
     if _wants_cli():
         from .cli import main as cli_main
@@ -47,6 +77,8 @@ def main() -> None:
         return
 
     # ── GUI mode ──────────────────────────────────────────────────────────────
+    gui_cfg = _parse_gui_args()
+
     from PyQt6.QtCore import Qt
     from PyQt6.QtGui import QFont
     from PyQt6.QtWidgets import QApplication
@@ -68,7 +100,7 @@ def main() -> None:
     font.setStyleHint(QFont.StyleHint.SansSerif)
     app.setFont(font)
 
-    window = MainWindow()
+    window = MainWindow(**gui_cfg)
     window.resize(1280, 820)
     window.show()
 

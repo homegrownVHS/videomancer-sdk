@@ -162,15 +162,22 @@ def _ordered_sdk_sources(config: str, core: str) -> list[Path]:
     Return SDK VHDL files in correct analysis order for GHDL.
 
     Dependency graph (→ means "depends on"):
-      video_stream_pkg  (pure package, no deps)
-      video_timing_pkg  → video_stream_pkg
-      video_sync_pkg    → video_timing_pkg
-      core_config_pkg   (pure package, no deps)
-      core_pkg          → video_timing_pkg, video_sync_pkg
-      converters/blanking (entities) → video_stream_pkg, video_timing_pkg, core_pkg
-      video_sync entities → video_timing_pkg, video_sync_pkg
-      dsp, utils, serial (standalone entities)
-      program_top entity → core_pkg, video_stream_pkg, video_timing_pkg
+      video_stream_pkg      (pure package, no deps)
+      video_timing_pkg      → video_stream_pkg
+      video_sync_pkg        → video_timing_pkg
+      core_config_pkg       (pure package, no deps)
+      core_pkg              → video_timing_pkg, video_sync_pkg
+      dsp entities          (standalone; edge_detector used by video_timing_generator)
+      video_field_detector  → video_sync_pkg (promoted: used by video_timing_generator)
+      utils, serial         (standalone entities)
+      video_stream entities → video_stream_pkg, video_timing_pkg, core_pkg
+      video_timing entities → video_timing_pkg, core_pkg, edge_detector, video_field_detector
+      video_sync entities   → video_sync_pkg, video_timing_pkg (rest, after video_timing)
+      program_top entity    → core_pkg, video_stream_pkg, video_timing_pkg
+
+    IMPORTANT: DSP entities (including edge_detector) and video_field_detector
+    must be analysed before video_timing entities because video_timing_generator
+    instantiates entity work.edge_detector and entity work.video_field_detector.
     """
     if core not in FPGA_CORES:
         raise ValueError(f"Unsupported core: {core!r}. Supported: {FPGA_CORES}")
@@ -179,13 +186,14 @@ def _ordered_sdk_sources(config: str, core: str) -> list[Path]:
 
     # 1. Packages first — strict dependency order
     #    video_stream_pkg → video_timing_pkg → video_sync_pkg
-    vs_dir = SDK_FPGA / "common/rtl/video_stream"
-    vt_dir = SDK_FPGA / "common/rtl/video_timing"
+    vs_dir    = SDK_FPGA / "common/rtl/video_stream"
+    vt_dir    = SDK_FPGA / "common/rtl/video_timing"
     vsync_dir = SDK_FPGA / "common/rtl/video_sync"
+    dsp_dir   = SDK_FPGA / "common/rtl/dsp"
+    utils_dir = SDK_FPGA / "common/rtl/utils"
 
-    # Package files (must come before any entities that use them)
-    _append_if_exists(sources, vs_dir / "video_stream_pkg.vhd")
-    _append_if_exists(sources, vt_dir / "video_timing_pkg.vhd")
+    _append_if_exists(sources, vs_dir    / "video_stream_pkg.vhd")
+    _append_if_exists(sources, vt_dir    / "video_timing_pkg.vhd")
     _append_if_exists(sources, vsync_dir / "video_sync_pkg.vhd")
 
     # 2. Core config package (e.g. sd_analog_pkg.vhd)
@@ -198,30 +206,41 @@ def _ordered_sdk_sources(config: str, core: str) -> list[Path]:
     core_dir = SDK_FPGA / "core" / core / "rtl"
     _append_if_exists(sources, core_dir / "core_pkg.vhd")
 
-    # 4. Video stream entities (converters, blanking — depend on core_pkg)
+    # 4. DSP entities — must come before video timing entities.
+    #    multiplier.vhd must be first: diff_multiplier_s and proc_amp both
+    #    instantiate entity work.multiplier_s defined there.
+    #    edge_detector.vhd is instantiated by video_timing_generator.vhd (step 6).
+    dsp_all   = sorted(dsp_dir.glob("*.vhd")) if dsp_dir.exists() else []
+    dsp_first = [f for f in dsp_all if f.name == "multiplier.vhd"]
+    dsp_rest  = [f for f in dsp_all if f.name != "multiplier.vhd"]
+    sources.extend(dsp_first + dsp_rest)
+
+    # 4b. video_field_detector promoted early — video_timing_generator instantiates
+    #     entity work.video_field_detector (which lives in video_sync, but has
+    #     no entity dependencies of its own beyond the packages).
+    _append_if_exists(sources, vsync_dir / "video_field_detector.vhd")
+
+    # 5. Utils and serial (standalone entities, no inter-dependencies)
+    sources.extend(SDK_VHDL_SOURCES["utils"])
+    sources.extend(SDK_VHDL_SOURCES["serial"])
+
+    # 6. Video stream entities (converters, blanking — depend on core_pkg)
     for f in sorted(vs_dir.glob("*.vhd")):
         if f.name != "video_stream_pkg.vhd" and f not in sources:
             sources.append(f)
 
-    # 5. Video timing entities
+    # 7. Video timing entities — video_timing_generator uses edge_detector
+    #    and video_field_detector, both now already in sources (steps 4/4b).
     for f in sorted(vt_dir.glob("*.vhd")):
         if f.name != "video_timing_pkg.vhd" and f not in sources:
             sources.append(f)
 
-    # 6. Video sync entities (depend on video_sync_pkg + video_timing_pkg)
+    # 8. Remaining video sync entities (video_field_detector already added in 4b)
     for f in sorted(vsync_dir.glob("*.vhd")):
         if f.name != "video_sync_pkg.vhd" and f not in sources:
             sources.append(f)
 
-    # 7. Shared IP: DSP (multiplier before interpolator), utils, serial
-    dsp_files = SDK_VHDL_SOURCES["dsp"]
-    multiplier = [f for f in dsp_files if "multiplier" in f.name]
-    other_dsp  = [f for f in dsp_files if "multiplier" not in f.name]
-    sources.extend(multiplier + other_dsp)
-    sources.extend(SDK_VHDL_SOURCES["utils"])
-    sources.extend(SDK_VHDL_SOURCES["serial"])
-
-    # 8. program_top.vhd entity declaration (depends on core_pkg)
+    # 9. program_top.vhd entity declaration (depends on core_pkg)
     _append_if_exists(sources, core_dir / "program_top.vhd")
     # core_top.vhd is not needed for simulation (synthesis only)
 

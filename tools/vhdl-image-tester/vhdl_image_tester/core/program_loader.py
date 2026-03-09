@@ -117,7 +117,8 @@ class Program:
     program_name:   str    = ""
     version:        str    = "1.0.0"
     author:         str    = ""
-    category:       str    = ""
+    categories:     list[str] = field(default_factory=list)
+    program_type:   str    = "processing"
     description:    str    = ""
     core:           str    = "yuv444_30b"
 
@@ -298,7 +299,8 @@ def load_program(name: str, programs_root: Path | None = None) -> Program:
         program_name = prog_data.get("program_name", name.title()),
         version      = prog_data.get("program_version", "1.0.0"),
         author       = prog_data.get("author", ""),
-        category     = prog_data.get("category", ""),
+        categories   = (prog_data.get("categories", []) or ([prog_data["category"]] if prog_data.get("category") else [])),
+        program_type = prog_data.get("program_type", "processing"),
         description  = prog_data.get("description", ""),
         core         = prog_data.get("core", "yuv444_30b"),
         pipeline_delay = int(prog_data.get("pipeline_delay", -1)),

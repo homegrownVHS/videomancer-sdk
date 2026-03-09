@@ -1,0 +1,2 @@
+       100000000 fs - default              -    INFO - Testing writes to multiple registers
+simulation stopped @28100ns with status 0

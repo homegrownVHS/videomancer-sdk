@@ -18,7 +18,7 @@
 -- along with this program. If not, see <https://www.gnu.org/licenses/>.
 --
 -- Description:
---   2 flip-flip synchronizers for crossing clock domains.
+--   2 flip-flop synchronizers for crossing clock domains.
 
 --------------------------------------------------------------------------------
 library ieee;
@@ -34,18 +34,18 @@ entity sync_slv is
 end entity sync_slv;
 
 architecture rtl of sync_slv is
-  signal a_ff  : std_logic_vector(a'range) := (others => '0');
-  signal a_ff2 : std_logic_vector(a'range) := (others => '0');
+  signal s_a_ff  : std_logic_vector(a'range) := (others => '0');
+  signal s_a_ff2 : std_logic_vector(a'range) := (others => '0');
 
 begin
   process(clk)
   begin
     if rising_edge(clk) then
-      a_ff  <= a;
-      a_ff2 <= a_ff;
+      s_a_ff  <= a;
+      s_a_ff2 <= s_a_ff;
     end if;
   end process;
 
-  b <= a_ff2;
+  b <= s_a_ff2;
 
 end architecture rtl;

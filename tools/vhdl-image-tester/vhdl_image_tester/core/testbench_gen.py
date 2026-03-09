@@ -194,8 +194,12 @@ begin
             wait until rising_edge(clk);
 
             -- == Detect output sync edges ====================================
-            v_hsync_fall := (v_out_hsync_prev = '1') and (data_out.hsync_n = '0');
-            v_vsync_fall := (v_out_vsync_prev = '1') and (data_out.vsync_n = '0');
+            -- Use /= '0' instead of = '1' so that uninitialized ('U') pipeline
+            -- outputs during the first C_PROCESSING_DELAY_CLKS cycles are treated
+            -- as "was high", allowing the first real 0->0 vsync/hsync fall to be
+            -- detected correctly.
+            v_hsync_fall := (v_out_hsync_prev /= '0') and (data_out.hsync_n = '0');
+            v_vsync_fall := (v_out_vsync_prev /= '0') and (data_out.vsync_n = '0');
             v_out_hsync_prev := data_out.hsync_n;
             v_out_vsync_prev := data_out.vsync_n;
 

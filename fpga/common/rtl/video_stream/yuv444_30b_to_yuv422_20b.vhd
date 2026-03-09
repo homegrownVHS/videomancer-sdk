@@ -18,8 +18,18 @@
 -- along with this program. If not, see <https://www.gnu.org/licenses/>.
 --
 -- Description:
---   Converts a YUV444 stream to a YUV422 stream with variable bit depth
---   and discrete syncs passed with 1-cycle delay.
+--   Converts a YUV444 stream to a YUV422 stream with variable bit depth.
+--
+-- Pipeline Architecture:
+--   Stage 0: Input register (Y, U, V, sync signals)         [1 cycle]
+--   Stage 1: Sync delay + phase mux (U/V to C channel)      [1 cycle]
+--   Stage 2: Output alignment register (Y, C data)           [1 cycle]
+--
+-- Latency:
+--   Sync outputs:  2 clock cycles from sync inputs  (input reg + sync delay)
+--   Y/C data out:  3 clock cycles from data inputs  (input reg + mux + output)
+--   Note: Sync signals arrive 1 clock cycle before the corresponding
+--   Y/C data. This is by design to match downstream pipeline alignment.
 
 --------------------------------------------------------------------------------
 
@@ -72,7 +82,7 @@ architecture rtl of yuv444_30b_to_yuv422_20b is
 
 begin
 
-    -- Phase reset detection (rising edge of AVID)
+    -- Phase reset detection (falling edge of AVID delay chain)
     s_phase_reset <= '1' when (s_avid_in = '0' and s_avid_d1 = '1') else
         '0';
 

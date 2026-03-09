@@ -8,12 +8,25 @@
     "program"
   ],
   "properties": {
+    "firmware": {
+      "type": "object",
+      "description": "Firmware build configuration (proprietary extension, not part of .vmprog binary format)",
+      "properties": {
+        "embedded": {
+          "type": "boolean",
+          "description": "Whether to embed this program in firmware flash (true) or distribute via SD card (false)"
+        }
+      },
+      "additionalProperties": false
+    },
     "program": {
       "type": "object",
       "description": "Main program metadata and configuration",
       "required": [
         "program_id",
-        "program_name"
+        "program_name",
+        "categories",
+        "program_type"
       ],
       "properties": {
         "program_id": {
@@ -101,16 +114,64 @@
             "Proprietary"
           ]
         },
-        "category": {
+        "categories": {
+          "type": "array",
+          "description": "Program categories (tags). At least one category is required; up to 8 may be specified. Programs can belong to multiple categories. See docs/program-categories.md for descriptions.",
+          "minItems": 1,
+          "maxItems": 8,
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "maxLength": 31,
+            "minLength": 1,
+            "enum": [
+              "Analysis",
+              "Camera",
+              "Color",
+              "Computer",
+              "Craft",
+              "Curve",
+              "Demo",
+              "Edges",
+              "Fairlight",
+              "Film",
+              "Fractal",
+              "Game",
+              "Glitch",
+              "Grid",
+              "Illusion",
+              "Mask",
+              "Material",
+              "Mirror",
+              "NewTek",
+              "Noise",
+              "Optics",
+              "Organic",
+              "Pattern",
+              "Pixel",
+              "Print",
+              "Quantel",
+              "Render",
+              "Screen",
+              "Shape",
+              "Signal",
+              "Temporal",
+              "Text",
+              "Transition",
+              "Tube",
+              "Vision",
+              "Warp",
+              "Weather"
+            ]
+          },
+          "default": []
+        },
+        "program_type": {
           "type": "string",
-          "description": "Program category for organization. Optional: defaults to empty string if not specified.",
-          "maxLength": 31,
-          "minLength": 0,
-          "examples": [
-            "Signal Generation",
-            "Video Processing",
-            "Effects",
-            "Utilities"
+          "description": "Whether this program processes an input video signal ('processing') or generates imagery from scratch ('synthesis'). Required.",
+          "enum": [
+            "processing",
+            "synthesis"
           ]
         },
         "description": {
@@ -981,7 +1042,8 @@
         "program_name": "Waveform Generator",
         "author": "LZX Industries LLC",
         "license": "GPL-3.0",
-        "category": "Signal Generation",
+        "categories": ["Render"],
+        "program_type": "synthesis",
         "description": "A versatile waveform generator with multiple controls for frequency, amplitude, and shape modulation.",
         "program_version": "1.2.3",
         "abi_version": ">=1.0,<2.0"

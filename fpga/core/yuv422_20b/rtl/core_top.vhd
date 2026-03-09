@@ -240,10 +240,10 @@ begin
 
   spi_peripheral_inst : entity work.spi_peripheral
     generic map(
-      DATA_WIDTH => C_SPI_TRANSFER_DATA_BITS,
-      ADDR_WIDTH => C_SPI_TRANSFER_ADDR_WIDTH,
-      CPOL => '0',
-      CPHA => '0'
+      G_DATA_WIDTH => C_SPI_TRANSFER_DATA_BITS,
+      G_ADDR_WIDTH => C_SPI_TRANSFER_ADDR_WIDTH,
+      G_CPOL => '0',
+      G_CPHA => '0'
     )
     port map(
       clk => vid_clk,

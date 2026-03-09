@@ -587,14 +587,12 @@ for PROGRAM in $PROGRAMS; do
         cd ..
         echo -e "${GREEN}✓ All 6 bitstream variants generated in ${TOTAL_BITSTREAM_TIME}s${NC}"
 
-        # Convert TOML configuration to binary (once per program, shared across hardware)
-        if [ ! -f "${BUILD_ROOT}/program_config.bin" ]; then
-            echo -e "${GREEN}Converting TOML configuration to binary...${NC}"
-            cd tools/toml-converter
-            python3 toml_to_config_binary.py "${PROJECT_ROOT}${PROGRAM}.toml" "${BUILD_ROOT}program_config.bin" --quiet
-            cd ../..
-            echo -e "${GREEN}✓ Configuration binary created${NC}"
-        fi
+        # Convert TOML configuration to binary (always regenerate to avoid stale config)
+        echo -e "${GREEN}Converting TOML configuration to binary...${NC}"
+        cd tools/toml-converter
+        python3 toml_to_config_binary.py "${PROJECT_ROOT}${PROGRAM}.toml" "${BUILD_ROOT}program_config.bin" --quiet
+        cd ../..
+        echo -e "${GREEN}✓ Configuration binary created${NC}"
 
         # Copy program_config.bin to hardware-specific build directory
         cp "${BUILD_ROOT}/program_config.bin" "${HW_BUILD_ROOT}/program_config.bin"

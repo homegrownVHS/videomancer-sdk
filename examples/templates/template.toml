@@ -17,7 +17,8 @@ abi_version = ">=1.0,<2.0"
 program_name = "Waveform Generator"
 author = "LZX Industries LLC"
 license = "GPL-3.0"
-category = "Signal Generation"
+categories = ["Render"]
+program_type = "synthesis"
 description = "A versatile waveform generator with multiple controls for frequency, amplitude, and shape modulation."
 url = "https://github.com/lzxindustries/videomancer-sdk"
 hardware_compatibility = ["rev_a", "rev_b"]

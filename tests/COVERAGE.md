@@ -4,11 +4,11 @@
 
 **Test Suite Status**: ✅ All tests passing
 **Total C++ Unit Tests**: 107 tests across 5 test suites
-**VHDL Unit Tests**: 23 tests across 4 test suites
+**VHDL Unit Tests**: 80 tests across 9 test suites
 **Python Tests**: 2 test modules
 **Shell Tests**: 2 integration tests
 **Header Coverage**: 7/8 headers (88%)
-**Last Updated**: 2025-12-15
+**Last Updated**: 2026-03-08
 
 ## C++ Header Coverage
 
@@ -54,11 +54,11 @@ Validates ABI constants and register addresses:
 - ✅ Video timing IDs (uniqueness within 4-bit range)
 - ✅ Video timing ID completeness (all 16 values covered)
 
-### test_vmprog_format (41 tests)
+### test_vmprog_format (47 tests)
 Validates VMProg format structures and utilities:
 
 **Core Structure Tests (4 tests)**
-- ✅ Struct sizes (header=64B, TOC entry=64B, config=7372B)
+- ✅ Struct sizes (header=64B, TOC entry=64B, config=7936B)
 - ✅ Magic number validation (0x47504D56)
 - ✅ Enum sizes (all 32-bit)
 - ✅ Validation result values (ok=0, all error codes unique)
@@ -123,6 +123,14 @@ Validates VMProg format structures and utilities:
 - ✅ safe_strncpy zero-size buffer leaves dest unchanged
 - ✅ Header file_size mismatch detection
 - ✅ TOC extending past file end detection
+
+**Video Timing Tests (6 tests)**
+- ✅ Timing ID to bitmask conversion
+- ✅ Timing support checking against supported_timings mask
+- ✅ HD/SD timing classification
+- ✅ Supported timings default initialization
+- ✅ Valid supported timings acceptance
+- ✅ Reserved bit in supported timings rejection
 
 ### test_vmprog_stream_reader (37 tests)
 Validates stream-based reading and integration workflows:
@@ -253,10 +261,10 @@ The following headers define abstract interfaces and are tested indirectly throu
 | Category | Count |
 |----------|-------|
 | C++ Unit Tests | 107 |
-| VHDL Unit Tests | 23 |
+| VHDL Unit Tests | 80 |
 | Python Tests | 2 |
 | Shell Tests | 2 |
-| **Total Tests** | **134** |
+| **Total Tests** | **191** |
 | Pass Rate | 100% |
 | Compilation Status | ✅ Clean |
 | Integration | ✅ CMake + CTest + VUnit + Test Runner |
@@ -311,9 +319,139 @@ Recent enhancements to the test suite:
 - ✅ Created unified test runner script
 - ✅ Achieved 100% method-level coverage for all public APIs
 
+## VHDL Test Coverage
+
+### Module Coverage
+
+| Module | Testbench | Tests | Status |
+|--------|-----------|-------|--------|
+| `sync_slv` | tb_sync_slv | 8 | ✅ Passed |
+| `multiplier_s` | tb_multiplier | 12 | ✅ Passed |
+| `interpolator_u` | tb_interpolator | 12 | ✅ Passed |
+| `proc_amp_u` | tb_proc_amp | 11 | ✅ Passed |
+| `spi_peripheral` | tb_spi_peripheral | 8 | ✅ Passed |
+| `video_field_detector` | tb_video_field_detector | 7 | ✅ Passed |
+| `yuv422_20b_to_yuv444_30b` | tb_yuv422_to_yuv444 | 11 | ✅ Passed |
+| `yuv444_30b_to_yuv422_20b` | tb_yuv444_to_yuv422 | 5 | ✅ Passed |
+| `yuv444_30b_blanking` | tb_blanking_yuv444 | 6 | ✅ Passed |
+| `video_sync_generator` | — | — | ⚠️ Not tested |
+| `core_top` (yuv444_30b) | — | — | ⚠️ Not tested |
+| `core_top` (yuv422_20b) | — | — | ⚠️ Not tested |
+
+**RTL Module Coverage**: 9 / 12 modules (75%)
+
+### tb_multiplier (12 tests)
+Validates `multiplier_s` Radix-4 Booth signed multiplier with accumulator:
+- ✅ Zero × zero → 0
+- ✅ Unity gain (1.0 × input)
+- ✅ Positive × positive quadrant
+- ✅ Negative × positive quadrant
+- ✅ Positive × negative quadrant
+- ✅ Negative × negative quadrant
+- ✅ Accumulator z passthrough (0 × 0 + z)
+- ✅ Product + accumulator combined
+- ✅ Positive overflow clamping to G_OUTPUT_MAX
+- ✅ Negative overflow clamping to G_OUTPUT_MIN
+- ✅ Valid deasserted suppresses output
+- ✅ Back-to-back throughput (no stalls)
+
+### tb_proc_amp (11 tests)
+Validates `proc_amp_u` unsigned processing amplifier:
+- ✅ Unity gain at midgray (512)
+- ✅ Unity gain at black (0)
+- ✅ Unity gain at white (1023)
+- ✅ Zero contrast collapses to brightness
+- ✅ Maximum brightness shift
+- ✅ Minimum brightness shift
+- ✅ Double contrast (2×)
+- ✅ Positive clamping to max output
+- ✅ Negative clamping to min output
+- ✅ Valid pipeline propagation
+- ✅ Contrast symmetry (equidistant inputs)
+
+### tb_interpolator (12 tests)
+Validates `interpolator_u` 4-stage pipelined linear interpolator:
+- ✅ t=0 returns a
+- ✅ t=max returns ~b (within rounding)
+- ✅ Midpoint interpolation (a+b)/2
+- ✅ Reverse direction (b < a)
+- ✅ Same endpoints (a == b)
+- ✅ Zero endpoints
+- ✅ Maximum endpoints
+- ✅ Quarter interpolation accuracy
+- ✅ Three-quarter interpolation accuracy
+- ✅ Valid deasserted suppresses output
+- ✅ Back-to-back throughput
+- ✅ Full-range sweep (parametric)
+
+### tb_spi_peripheral (8 tests)
+Validates `spi_peripheral` SPI Mode 1 (CPOL=0, CPHA=1) state machine:
+- ✅ CS idle (no spurious writes)
+- ✅ Single register write
+- ✅ Write to address 0
+- ✅ Write to maximum address
+- ✅ Multiple sequential writes
+- ✅ CS deassert resets state machine
+- ✅ Read issues rd_en pulse
+- ✅ Register overwrite (new value replaces old)
+
+### tb_video_field_detector (7 tests)
+Validates `video_field_detector` interlaced/progressive detection:
+- ✅ Progressive detection (same VSYNC position both fields)
+- ✅ Interlaced detection (alternating VSYNC position)
+- ✅ Field parity toggle on alternating fields
+- ✅ HSYNC counter reset
+- ✅ VSYNC without preceding HSYNC
+- ✅ Short line handling
+- ✅ Idle-then-active startup
+
+### tb_sync_slv (8 tests)
+Validates `sync_slv` 2-FF clock domain crossing synchronizer:
+- ✅ Synchronize zeros
+- ✅ Synchronize non-zero value
+- ✅ Value changes propagation
+- ✅ Two flip-flop delay measurement
+- ✅ All-bits toggle (walking ones)
+- ✅ Cross-domain synchronization (async 13.7ns → 10ns clock)
+- ✅ Rapid asynchronous transitions
+- ✅ Glitch rejection (sub-cycle pulses)
+
+### tb_yuv422_to_yuv444 (11 tests)
+Validates `yuv422_20b_to_yuv444_30b` chroma upsampling:
+- ✅ Basic CbCr conversion
+- ✅ Sync signal delay alignment (2 cycles)
+- ✅ AVID phase reset
+- ✅ Black level passthrough
+- ✅ White level passthrough
+- ✅ Field signal propagation
+- ✅ Continuous stream (5 pixel pairs)
+- ✅ Chroma phase-1 value verification
+- ✅ Long 100-pair stream stability
+- ✅ AVID de-assert/re-assert boundary
+- ✅ VSYNC propagation with correct delay
+
+### tb_yuv444_to_yuv422 (5 tests)
+Validates `yuv444_30b_to_yuv422_20b` chroma downsampling:
+- ✅ Basic conversion
+- ✅ Sync delay alignment
+- ✅ Phase reset on AVID
+- ✅ Chroma alternation (Cb/Cr phase)
+- ✅ Field propagation
+
+### tb_blanking_yuv444 (6 tests)
+Validates `yuv444_30b_blanking` blanking replacement:
+- ✅ Active video passthrough
+- ✅ Blanking replacement (zeros during blank)
+- ✅ Sync signal passthrough
+- ✅ Active-to-blanking transition
+- ✅ Blanking-to-active transition
+- ✅ Continuous blanking interval
+
 ## Future Test Enhancements
 
 Potential areas for expansion:
+- [ ] `video_sync_generator` testbench (307-line sync generator with configurable timing)
+- [ ] `core_top` integration testbenches (yuv444_30b, yuv422_20b)
 - [ ] Performance benchmarks for cryptographic operations
 - [ ] Stress tests for large file processing
 - [ ] Thread safety validation (if applicable)

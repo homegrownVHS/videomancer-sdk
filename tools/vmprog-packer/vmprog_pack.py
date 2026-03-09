@@ -16,7 +16,7 @@ Usage:
 
 Input directory structure:
     input_dir/
-        program_config.bin          # Required: 7712 bytes
+        program_config.bin          # Required: 7936 bytes
         bitstreams/                 # Required directory
             sd_analog.bin           # Optional: SD analog bitstream
             sd_hdmi.bin             # Optional: SD HDMI bitstream
@@ -65,7 +65,7 @@ VERSION_MINOR = 0
 # Structure sizes
 HEADER_SIZE = 64
 TOC_ENTRY_SIZE = 64
-PROGRAM_CONFIG_SIZE = 7712
+PROGRAM_CONFIG_SIZE = 7936
 SIGNED_DESCRIPTOR_SIZE = 332
 SIGNATURE_SIZE = 64
 ARTIFACT_HASH_SIZE = 36
@@ -423,9 +423,9 @@ def build_vmprog_package(input_dir: Path, output_path: Path, sign: bool = True, 
         return False
 
     # Cross-validate supported_timings vs available bitstreams
-    # supported_timings is a uint16_t at offset: 64 + 14 + 4 + 4 + 32 + 64 + 32 + 32 + 128 + 128
-    #   + 2 + 1 + 1 + 572*12 + 40*8 = 7690
-    SUPPORTED_TIMINGS_OFFSET = 7690
+    # supported_timings is a uint16_t at offset: 64 + 14 + 4 + 4 + 32 + 64 + 32 + 256 + 128 + 128
+    #   + 2 + 1 + 1 + 572*12 + 40*8 = 7914
+    SUPPORTED_TIMINGS_OFFSET = 7914
     supported_timings_mask = struct.unpack_from('<H', config_data, SUPPORTED_TIMINGS_OFFSET)[0]
 
     if supported_timings_mask != 0:
@@ -938,23 +938,28 @@ def validate_program_config(data: bytes, offset: int) -> int:
     if result != ValidationResult.OK:
         return result
 
-    result = validate_string_terminated(data, offset + 82, 32, "program_name")
+    result = validate_string_terminated(data, offset + 86, 32, "program_name")
     if result != ValidationResult.OK:
         return result
 
-    result = validate_string_terminated(data, offset + 114, 64, "author")
+    result = validate_string_terminated(data, offset + 118, 64, "author")
     if result != ValidationResult.OK:
         return result
 
-    result = validate_string_terminated(data, offset + 178, 32, "license")
+    result = validate_string_terminated(data, offset + 182, 32, "license")
     if result != ValidationResult.OK:
         return result
 
-    result = validate_string_terminated(data, offset + 210, 32, "category")
-    if result != ValidationResult.OK:
-        return result
+    # Validate category strings (8 × 32 bytes starting at offset 214)
+    category_count_offset = offset + 729  # category_count is at this offset
+    if category_count_offset < len(data):
+        cat_count = data[category_count_offset]
+        for i in range(min(cat_count, 8)):
+            result = validate_string_terminated(data, offset + 214 + i * 32, 32, f"categories[{i}]")
+            if result != ValidationResult.OK:
+                return result
 
-    result = validate_string_terminated(data, offset + 242, 128, "description")
+    result = validate_string_terminated(data, offset + 470, 128, "description")
     if result != ValidationResult.OK:
         return result
 
@@ -971,13 +976,9 @@ def validate_program_config(data: bytes, offset: int) -> int:
         return ValidationResult.INVALID_ABI_RANGE
 
     # Validate parameter count
-    parameter_count = struct.unpack_from('<H', data, offset + 498)[0]
+    parameter_count = struct.unpack_from('<H', data, offset + 726)[0]
     if parameter_count > 12:
         return ValidationResult.INVALID_PARAMETER_COUNT
-
-    # Validate reserved fields are zero
-    validate_reserved_zero(data, offset + 500, 2, "config.reserved_pad")
-    validate_reserved_zero(data, offset + 7366, 2, "config.reserved")
 
     return ValidationResult.OK
 
@@ -995,7 +996,7 @@ def main():
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Input directory must contain:
-  - program_config.bin (7372 bytes)
+  - program_config.bin (7936 bytes)
   - bitstreams/ directory with *.bin files
 
 Example:

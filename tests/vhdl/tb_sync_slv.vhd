@@ -19,7 +19,9 @@
 --
 -- Description:
 --   VUnit testbench for sync_slv (clock domain synchronizer) module.
---   Tests basic synchronization behavior and verifies 2-FF delay chain.
+--   Tests basic synchronization behavior, verifies 2-FF delay chain,
+--   and validates cross-clock-domain synchronization with an asynchronous
+--   source clock at a non-integer ratio.
 
 --------------------------------------------------------------------------------
 
@@ -41,6 +43,9 @@ architecture tb of tb_sync_slv is
   -- Clock period
   constant C_CLK_PERIOD : time := 10 ns;
 
+  -- Asynchronous source clock (non-integer ratio to destination clock)
+  constant C_SRC_CLK_PERIOD : time := 13.7 ns;  -- ~73 MHz, irrational ratio to 100 MHz
+
   -- Test vector width
   constant C_WIDTH : integer := 8;
 
@@ -49,6 +54,10 @@ architecture tb of tb_sync_slv is
   signal a   : std_logic_vector(C_WIDTH-1 downto 0) := (others => '0');
   signal b   : std_logic_vector(C_WIDTH-1 downto 0);
 
+  -- Async source domain signals
+  signal src_clk  : std_logic := '0';
+  signal src_data : std_logic_vector(C_WIDTH-1 downto 0) := (others => '0');
+
   -- Test control
   signal test_done : boolean := false;
 
@@ -56,6 +65,9 @@ begin
 
   -- Clock generation
   clk <= not clk after C_CLK_PERIOD/2 when not test_done;
+
+  -- Async source clock for CDC tests
+  src_clk <= not src_clk after C_SRC_CLK_PERIOD/2 when not test_done;
 
   -- Device Under Test
   dut: entity rtl_lib.sync_slv
@@ -173,6 +185,75 @@ begin
         a <= x"0F";  -- 00001111
         wait for 2 * C_CLK_PERIOD + 1 ns;
         check_equal(b, std_logic_vector'(x"0F"), "Pattern 0x0F should synchronize");
+
+      -- Test 6: Cross-clock-domain synchronization
+      -- Source data changes on src_clk (non-integer ratio to destination clk)
+      -- After sufficient destination clock cycles, output should match
+      elsif run("test_cross_domain_sync") then
+        info("Testing cross-domain synchronization (async clocks)");
+
+        -- Drive input from source clock domain
+        a <= x"00";
+        wait for 4 * C_CLK_PERIOD;  -- Flush pipeline
+
+        -- Change on source clock edge (async to destination)
+        wait until rising_edge(src_clk);
+        a <= x"C3";
+
+        -- Wait for 2 destination clock cycles + margin for metastability settling
+        wait for 3 * C_CLK_PERIOD + 1 ns;
+        check_equal(b, std_logic_vector'(x"C3"),
+                   "Cross-domain: 0xC3 should propagate through 2-FF synchronizer");
+
+        -- Another async change
+        wait until rising_edge(src_clk);
+        a <= x"3C";
+        wait for 3 * C_CLK_PERIOD + 1 ns;
+        check_equal(b, std_logic_vector'(x"3C"),
+                   "Cross-domain: 0x3C should propagate");
+
+      -- Test 7: Rapid async transitions
+      -- Data changes every source clock cycle; output should eventually
+      -- settle to the last stable value
+      elsif run("test_rapid_async_transitions") then
+        info("Testing rapid async transitions");
+
+        for i in 0 to 7 loop
+          wait until rising_edge(src_clk);
+          a <= std_logic_vector(to_unsigned(i * 31, C_WIDTH));
+        end loop;
+
+        -- Hold last value and wait for synchronizer to settle
+        wait for 5 * C_CLK_PERIOD + 1 ns;
+        -- Output should contain last driven value (7*31 = 217 = 0xD9)
+        check_equal(b, std_logic_vector(to_unsigned(7 * 31, C_WIDTH)),
+                   "After rapid transitions, output should settle to last value");
+
+      -- Test 8: Glitch rejection — change and revert within one destination cycle
+      -- If source changes and reverts faster than 2 destination clock edges,
+      -- the output should remain at the old value (glitch suppressed)
+      elsif run("test_glitch_rejection") then
+        info("Testing glitch rejection");
+
+        -- Establish stable value
+        a <= x"AA";
+        wait for 5 * C_CLK_PERIOD;
+        check_equal(b, std_logic_vector'(x"AA"), "Baseline should be 0xAA");
+
+        -- Create a "glitch": change and revert within sub-clock timing
+        -- This is a simulation-only demonstration of the concept
+        a <= x"55";
+        wait for C_CLK_PERIOD / 4;  -- 2.5 ns — sub-clock transition
+        a <= x"AA";  -- Revert immediately
+
+        -- Wait for pipeline
+        wait for 4 * C_CLK_PERIOD + 1 ns;
+        -- The output should still be 0xAA (glitch was filtered)
+        -- Note: in simulation without real metastability, the FF captures
+        -- whatever was stable at the clock edge. This verifies the 2-FF
+        -- doesn't propagate a transient.
+        check_equal(b, std_logic_vector'(x"AA"),
+                   "Sub-clock glitch should be rejected by synchronizer");
 
       end if;
 

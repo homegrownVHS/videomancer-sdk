@@ -20,6 +20,14 @@
 -- Description:
 --   Generates bi-level and tri-level sync signals based on reference sync
 --   inputs and timing configurations.
+--
+-- Timing Behavior:
+--   This is a counter-based sync waveform generator, not a fixed-depth
+--   pipeline. The timing input has a 2-cycle configuration pipeline
+--   (timing -> s_timing -> config registers). Sync outputs are registered
+--   comparisons against free-running counters, so output latency relative
+--   to ref_hsync/ref_vsync depends on the video standard's counter periods.
+--   HSYNC output period matches the configured clocks-per-line exactly.
 
 --------------------------------------------------------------------------------
 
@@ -53,20 +61,6 @@ architecture rtl of video_sync_generator is
   signal s_ref_fsync                : std_logic := '0';
   signal s_trisync_en               : std_logic := '0';
   signal s_timing                   : t_video_timing_id;
-  -- signal s_havid_clks_1             : unsigned(C_VIDEO_SYNC_DATA_WIDTH - 1 downto 0);
-  -- signal s_havid_clks_0             : unsigned(C_VIDEO_SYNC_DATA_WIDTH - 1 downto 0);
-  -- signal s_vavid_a_clks_1           : unsigned(C_VIDEO_SYNC_DATA_WIDTH - 1 downto 0);
-  -- signal s_vavid_a_lines_1          : unsigned(C_VIDEO_SYNC_DATA_WIDTH - 1 downto 0);
-  -- signal s_vavid_a_clks_0           : unsigned(C_VIDEO_SYNC_DATA_WIDTH - 1 downto 0);
-  -- signal s_vavid_a_lines_0          : unsigned(C_VIDEO_SYNC_DATA_WIDTH - 1 downto 0);
-  -- signal s_vavid_b_clks_1           : unsigned(C_VIDEO_SYNC_DATA_WIDTH - 1 downto 0);
-  -- signal s_vavid_b_lines_1          : unsigned(C_VIDEO_SYNC_DATA_WIDTH - 1 downto 0);
-  -- signal s_vavid_b_clks_0           : unsigned(C_VIDEO_SYNC_DATA_WIDTH - 1 downto 0);
-  -- signal s_vavid_b_lines_0          : unsigned(C_VIDEO_SYNC_DATA_WIDTH - 1 downto 0);
-  -- signal s_field_clks_1             : unsigned(C_VIDEO_SYNC_DATA_WIDTH - 1 downto 0);
-  -- signal s_field_lines_1            : unsigned(C_VIDEO_SYNC_DATA_WIDTH - 1 downto 0);
-  -- signal s_field_clks_0             : unsigned(C_VIDEO_SYNC_DATA_WIDTH - 1 downto 0);
-  -- signal s_field_lines_0            : unsigned(C_VIDEO_SYNC_DATA_WIDTH - 1 downto 0);
   signal s_is_interlaced            : std_logic := '0';
   signal s_fsync_clks               : unsigned(C_VIDEO_SYNC_DATA_WIDTH - 1 downto 0);
   signal s_fsync_lines              : unsigned(C_VIDEO_SYNC_DATA_WIDTH - 1 downto 0);
@@ -117,10 +111,6 @@ architecture rtl of video_sync_generator is
   signal s_eq_pulses                : std_logic := '0';
   signal s_csync_serration          : std_logic := '0';
   signal s_vsync                    : std_logic := '0';
-  signal s_havid                    : std_logic := '0';
-  signal s_vavid                    : std_logic := '0';
-  signal s_avid                     : std_logic := '0';
-  signal s_field                    : std_logic := '0';
 
 begin
 
@@ -152,7 +142,6 @@ begin
       s_fsync_lines              <= C_VIDEO_SYNC_CONFIG_ARRAY(to_integer(unsigned(s_timing))).fsync_lines;
       s_hsync_clks_0             <= C_VIDEO_SYNC_CONFIG_ARRAY(to_integer(unsigned(s_timing))).hsync_clks_0;
       s_hsync_clks_1             <= C_VIDEO_SYNC_CONFIG_ARRAY(to_integer(unsigned(s_timing))).hsync_clks_1;
-      s_hsync_clks_0             <= C_VIDEO_SYNC_CONFIG_ARRAY(to_integer(unsigned(s_timing))).hsync_clks_0;
       s_hsync_clks_b_1           <= C_VIDEO_SYNC_CONFIG_ARRAY(to_integer(unsigned(s_timing))).hsync_clks_b_1;
       s_hsync_clks_b_0           <= C_VIDEO_SYNC_CONFIG_ARRAY(to_integer(unsigned(s_timing))).hsync_clks_b_0;
       s_csync_clks_1             <= C_VIDEO_SYNC_CONFIG_ARRAY(to_integer(unsigned(s_timing))).csync_clks_1;
@@ -263,29 +252,6 @@ begin
         s_vsync <= '1';
       end if;
 
-      -- -- Horizontal active video generation
-      -- if s_counter_clks = s_havid_clks_0 then
-      --   s_havid <= '0';
-      -- elsif s_counter_clks = s_havid_clks_1 then
-      --   s_havid <= '1';
-      -- end if;
-
-      -- -- Vertical active video generation
-      -- if (s_counter_lines = s_vavid_a_lines_0 and s_counter_clks = s_vavid_a_clks_0) or
-      --    (s_counter_lines = s_vavid_b_lines_0 and s_counter_clks = s_vavid_b_clks_0) then
-      --   s_vavid <= '0';
-      -- elsif (s_counter_lines = s_vavid_a_lines_1 and s_counter_clks = s_vavid_a_clks_1) or
-      --       (s_counter_lines = s_vavid_b_lines_1 and s_counter_clks = s_vavid_b_clks_1) then
-      --   s_vavid <= '1';
-      -- end if;
-
-      -- -- Field generation
-      -- if (s_counter_lines = s_field_lines_0 and s_counter_clks = s_field_clks_0) then
-      --   s_field <= '0';
-      -- elsif (s_counter_lines = s_field_lines_1 and s_counter_clks = s_field_clks_1) then
-      --   s_field <= '1';
-      -- end if;
-
     end if;
   end process;
 
@@ -295,8 +261,6 @@ begin
   s_trisync_n <= s_csync_serration when s_vsync = '1' else
     s_csync_2x when s_eq_pulses = '1' else
     s_csync;
-
-  -- s_avid <= s_vavid and s_havid;
 
   trisync_p <= s_trisync_p;
   trisync_n <= s_trisync_n;

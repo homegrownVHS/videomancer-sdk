@@ -80,7 +80,9 @@ package body resolution_pkg is
     function get_v_active (timing_id : t_video_timing_id) return unsigned is
     begin
         case timing_id is
-            when C_NTSC | C_480P =>
+            when C_NTSC =>
+                return to_unsigned(486, 12);
+            when C_480P =>
                 return to_unsigned(480, 12);
             when C_PAL | C_576P =>
                 return to_unsigned(576, 12);
@@ -106,7 +108,9 @@ package body resolution_pkg is
     function get_v_center (timing_id : t_video_timing_id) return unsigned is
     begin
         case timing_id is
-            when C_NTSC | C_480P =>
+            when C_NTSC =>
+                return to_unsigned(243, 12);
+            when C_480P =>
                 return to_unsigned(240, 12);
             when C_PAL | C_576P =>
                 return to_unsigned(288, 12);

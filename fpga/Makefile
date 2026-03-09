@@ -32,7 +32,6 @@ else
 endif
 
 VHD_FILES = $(wildcard $(VIDEOMANCER_SDK_ROOT)/fpga/core/${CORE}/rtl/*.vhd) \
-	$(wildcard $(PROJECT_ROOT)/*.vhd) \
 	$(CONFIG_PKG) \
 	$(wildcard $(VIDEOMANCER_SDK_ROOT)/fpga/common/rtl/serial/*.vhd) \
 	$(wildcard $(VIDEOMANCER_SDK_ROOT)/fpga/common/rtl/dsp/*.vhd) \
@@ -42,7 +41,8 @@ VHD_FILES = $(wildcard $(VIDEOMANCER_SDK_ROOT)/fpga/core/${CORE}/rtl/*.vhd) \
 	$(wildcard $(VIDEOMANCER_SDK_ROOT)/fpga/common/rtl/video_sync/*.vhd) \
 	$(wildcard $(VIDEOMANCER_SDK_ROOT)/fpga/platform/$(PLATFORM)/rtl/*.vhd) \
 	$(wildcard $(VIDEOMANCER_SDK_ROOT)/fpga/hardware/$(HARDWARE)/rtl/*.vhd) \
-	$(wildcard $(VIDEOMANCER_SDK_ROOT)/third_party/SiliconBlue/rtl/sb_*.vhd)
+	$(wildcard $(VIDEOMANCER_SDK_ROOT)/third_party/SiliconBlue/rtl/sb_*.vhd) \
+	$(wildcard $(PROJECT_ROOT)/*.vhd)
 
 PCF_FILE = \
 	$(VIDEOMANCER_SDK_ROOT)/fpga/hardware/$(HARDWARE)/constraints/pin_map.pcf

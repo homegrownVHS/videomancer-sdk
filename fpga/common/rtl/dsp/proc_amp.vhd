@@ -70,9 +70,20 @@
 --   - C_FRAC_BITS = G_WIDTH fractional bits for fixed-point precision
 --   - Multiplier includes integrated clamping to valid output range
 --
--- Latency:
---   1 cycle (input registration) + multiplier_s latency (typically 6-9 cycles)
---   Total: ~7-10 clock cycles
+-- Latency (clock cycles from enable assertion to output):
+--   Internal multiplier width: G_WIDTH + 2
+--   Internal multiplier stages: (G_WIDTH + 3) / 2
+--
+--   Valid signal:  (G_WIDTH + 3) / 2 + 3 cycles
+--   Data output:   (G_WIDTH + 3) / 2 + 4 cycles
+--
+--   Note: Valid leads result by 1 clock cycle (inherited from multiplier_s).
+--   In streaming mode, both valid and result are correct after data latency.
+--
+--   Example latencies:
+--     G_WIDTH=8:  valid=8,  data=9  cycles
+--     G_WIDTH=10: valid=9,  data=10 cycles
+--     G_WIDTH=12: valid=10, data=11 cycles
 --
 -- Features:
 --   - Precise fixed-point arithmetic using signed multiplier

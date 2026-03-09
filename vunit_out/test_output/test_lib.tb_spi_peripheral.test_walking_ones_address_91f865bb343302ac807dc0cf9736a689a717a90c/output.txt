@@ -1,0 +1,2 @@
+       100000000 fs - default              -    INFO - Testing walking ones on address bits
+simulation stopped @55600ns with status 0

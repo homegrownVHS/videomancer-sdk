@@ -302,7 +302,7 @@ class ProgramPanel(QWidget):
             self._current_program = program
             self._prog_desc.setText(
                 f"<b>{program.display_name}</b>  v{program.version}<br>"
-                f"<i>{program.category}</i><br>"
+                f"<i>{', '.join(program.categories)}</i><br>"
                 f"{program.description[:120]}{'…' if len(program.description) > 120 else ''}"
             )
             # Defer signal emission so downstream layout rebuilds happen
@@ -347,6 +347,57 @@ class ProgramPanel(QWidget):
             self._img_preview.setPixmap(pix)
         else:
             self._img_preview.setText("(preview unavailable)")
+
+    def set_initial_config(
+        self,
+        *,
+        program: str | None = None,
+        image: str | Path | None = None,
+        video_mode: str | None = None,
+        decimation: int | None = None,
+    ) -> None:
+        """Apply initial selections programmatically.
+
+        Call **before** ``initialize()`` so the deferred signal emission
+        picks up the configured state.
+
+        Args:
+            program: Program name to select in the dropdown.
+            image: Image file path to select or insert.
+            video_mode: Video mode key (e.g. ``"1080p30"``).
+            decimation: Decimation factor (e.g. ``8``).
+        """
+        if program is not None:
+            idx = self._prog_combo.findText(program)
+            if idx >= 0:
+                self._prog_combo.setCurrentIndex(idx)
+
+        if image is not None:
+            img_path = Path(image)
+            matched = False
+            for i in range(self._img_combo.count()):
+                data = self._img_combo.itemData(i)
+                if isinstance(data, Path) and data == img_path:
+                    self._img_combo.setCurrentIndex(i)
+                    matched = True
+                    break
+            if not matched and img_path.exists():
+                self._custom_image_path = img_path
+                self._img_combo.blockSignals(True)
+                self._img_combo.insertItem(0, img_path.name, img_path)
+                self._img_combo.setCurrentIndex(0)
+                self._img_combo.blockSignals(False)
+                self._update_preview(img_path)
+
+        if video_mode is not None:
+            idx = self._video_mode_combo.findData(video_mode)
+            if idx >= 0:
+                self._video_mode_combo.setCurrentIndex(idx)
+
+        if decimation is not None:
+            idx = self._decimation_combo.findData(decimation)
+            if idx >= 0:
+                self._decimation_combo.setCurrentIndex(idx)
 
     def refresh_programs(self) -> None:
         """Re-scan programs directory and repopulate."""

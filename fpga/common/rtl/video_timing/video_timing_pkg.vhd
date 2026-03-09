@@ -26,9 +26,6 @@ library ieee;
 use ieee.std_logic_1164.all;
 use ieee.numeric_std.all;
 
-library work;
-use work.video_stream_pkg.all;
-
 package video_timing_pkg is
 
   constant C_VIDEO_TIMING_ID_WIDTH          : integer := 4;

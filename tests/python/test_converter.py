@@ -43,9 +43,9 @@ def verify_binary_output(binary_path: Path):
     with open(binary_path, 'rb') as f:
         data = f.read()
 
-    print(f"File size: {len(data)} bytes (expected: 7372)")
+    print(f"File size: {len(data)} bytes (expected: 7936)")
 
-    if len(data) != 7372:
+    if len(data) != 7936:
         print("✗ Size mismatch!")
         return False
 
@@ -68,37 +68,47 @@ def verify_binary_output(binary_path: Path):
     print(f"ABI Min: {abi_min_major}.{abi_min_minor}")
     print(f"ABI Max: {abi_max_major}.{abi_max_minor}")
 
-    # Read hw_mask
+    # Read hw_mask (uint32_t at offset 78)
     hw_mask = struct.unpack('<I', data[78:82])[0]
     print(f"HW Mask: 0x{hw_mask:08x}")
 
-    # Read program_name (bytes 82-114)
-    program_name = data[82:114].rstrip(b'\x00').decode('utf-8')
+    # Read core_id (uint32_t at offset 82)
+    core_id = struct.unpack('<I', data[82:86])[0]
+    print(f"Core ID: {core_id}")
+
+    # Read program_name (bytes 86-118)
+    program_name = data[86:118].rstrip(b'\x00').decode('utf-8')
     print(f"Program Name: {program_name}")
 
-    # Read author (bytes 114-178)
-    author = data[114:178].rstrip(b'\x00').decode('utf-8')
+    # Read author (bytes 118-182)
+    author = data[118:182].rstrip(b'\x00').decode('utf-8')
     print(f"Author: {author}")
 
-    # Read license (bytes 178-210)
-    license_str = data[178:210].rstrip(b'\x00').decode('utf-8')
+    # Read license (bytes 182-214)
+    license_str = data[182:214].rstrip(b'\x00').decode('utf-8')
     print(f"License: {license_str}")
 
-    # Read category (bytes 210-242)
-    category = data[210:242].rstrip(b'\x00').decode('utf-8')
-    print(f"Category: {category}")
+    # Read categories (bytes 214-470: 8 × 32-byte slots)
+    categories = []
+    for i in range(8):
+        cat_start = 214 + i * 32
+        cat_end = cat_start + 32
+        cat = data[cat_start:cat_end].rstrip(b'\x00').decode('utf-8')
+        if cat:
+            categories.append(cat)
+    print(f"Categories: {', '.join(categories) if categories else '(none)'}")
 
-    # Read description (bytes 242-370)
-    description = data[242:370].rstrip(b'\x00').decode('utf-8')
+    # Read description (bytes 470-598)
+    description = data[470:598].rstrip(b'\x00').decode('utf-8')
     print(f"Description: {description}")
 
-    # Read parameter_count (bytes 370-372)
-    parameter_count = struct.unpack('<H', data[370:372])[0]
+    # Read parameter_count (bytes 726-728)
+    parameter_count = struct.unpack('<H', data[726:728])[0]
     print(f"\nParameter Count: {parameter_count}")
 
-    # Read first parameter (starts at byte 374)
+    # Read first parameter (starts at byte 730)
     if parameter_count > 0:
-        param_offset = 374
+        param_offset = 730
         param_id, control_mode = struct.unpack('<II', data[param_offset:param_offset+8])
         min_val, max_val, init_val = struct.unpack('<HHH', data[param_offset+8:param_offset+14])
         print(f"\nParameter 1:")
@@ -106,7 +116,7 @@ def verify_binary_output(binary_path: Path):
         print(f"  Control Mode: {control_mode}")
         print(f"  Min: {min_val}, Max: {max_val}, Initial: {init_val}")
 
-        # Read parameter name (at offset 374 + 22 = 396)
+        # Read parameter name (at offset 730 + 22 = 752)
         param_name_offset = param_offset + 22
         param_name = data[param_name_offset:param_name_offset+32].rstrip(b'\x00').decode('utf-8')
         print(f"  Name: {param_name}")

@@ -392,6 +392,15 @@ namespace lzx {
     };
 #pragma pack(pop)
 
+    /// @brief Program type classification.
+    /// @details Determines whether a program processes input video or generates
+    ///          imagery from scratch.
+    enum class vmprog_program_type_v1_0 : uint8_t
+    {
+        processing = 0,   ///< Transforms an input video signal
+        synthesis  = 1    ///< Generates imagery without an input signal
+    };
+
 #pragma pack(push, 1)
     struct vmprog_program_config_v1_0
     {
@@ -400,11 +409,12 @@ namespace lzx {
         static constexpr uint32_t author_max_length = 64;
         static constexpr uint32_t license_max_length = 32;
         static constexpr uint32_t category_max_length = 32;
+        static constexpr uint32_t max_categories = 8;
         static constexpr uint32_t description_max_length = 128;
         static constexpr uint32_t url_max_length = 128;
         static constexpr uint32_t num_parameters = 12;
         static constexpr uint32_t max_presets = 8;
-        static constexpr uint32_t struct_size = 7712;
+        static constexpr uint32_t struct_size = 7936;
 
         // All string fields must be null-terminated
         char program_id[program_id_max_length];      // Unique program identifier
@@ -420,16 +430,17 @@ namespace lzx {
         char program_name[program_name_max_length];
         char author[author_max_length];
         char license[license_max_length];
-        char category[category_max_length];
+        char categories[max_categories][category_max_length];  // Up to 8 category tags
         char description[description_max_length];
         char url[url_max_length];
         uint16_t parameter_count;  // Number of valid parameters (0 to num_parameters)
         uint8_t  preset_count;     // Number of valid factory presets (0 to max_presets)
-        uint8_t  reserved_pad;     // Padding byte
+        uint8_t  category_count;   // Number of valid categories (1 to max_categories)
         vmprog_parameter_config_v1_0 parameters[num_parameters];
         vmprog_preset_config_v1_0 presets[max_presets];  // Factory preset definitions
         uint16_t supported_timings;  // Bitmask of supported video_timing_id values (0 = all)
-        uint8_t reserved[20];  // Padding to 7712 total
+        vmprog_program_type_v1_0 program_type;  // Processing or synthesis
+        uint8_t reserved[19];  // Padding to 7936 total
     };
 
 #pragma pack(pop)
@@ -560,8 +571,8 @@ namespace lzx {
     static_assert(offsetof(vmprog_program_config_v1_0, program_version_major) == 64,
         "vmprog_program_config_v1_0::program_version_major must be at offset 64");
 
-    static_assert(offsetof(vmprog_program_config_v1_0, supported_timings) == 7690,
-        "vmprog_program_config_v1_0::supported_timings must be at offset 7690 (binary format compat)");
+    static_assert(offsetof(vmprog_program_config_v1_0, supported_timings) == 7914,
+        "vmprog_program_config_v1_0::supported_timings must be at offset 7914 (binary format compat)");
 
     // Calculated size validations - verify struct size calculations are correct
     static_assert(vmprog_program_config_v1_0::struct_size ==
@@ -572,14 +583,16 @@ namespace lzx {
         vmprog_program_config_v1_0::program_name_max_length + // 32
         vmprog_program_config_v1_0::author_max_length +       // 64
         vmprog_program_config_v1_0::license_max_length +      // 32
-        vmprog_program_config_v1_0::category_max_length +     // 32
+        vmprog_program_config_v1_0::category_max_length *
+            vmprog_program_config_v1_0::max_categories +      // 256 (8 x 32)
         vmprog_program_config_v1_0::description_max_length +  // 128
         vmprog_program_config_v1_0::url_max_length +          // 128
-        4 +                                                   // 4 (parameter_count:2 + preset_count:1 + reserved_pad:1)
+        4 +                                                   // 4 (parameter_count:2 + preset_count:1 + category_count:1)
         sizeof(vmprog_parameter_config_v1_0) * vmprog_program_config_v1_0::num_parameters + // 6864
         sizeof(vmprog_preset_config_v1_0) * vmprog_program_config_v1_0::max_presets +       // 320
         sizeof(uint16_t) +                                                                   // 2 (supported_timings)
-        20,  // reserved padding
+        sizeof(vmprog_program_type_v1_0) +                                                    // 1 (program_type)
+        19,  // reserved padding
         "vmprog_program_config_v1_0::struct_size calculation mismatch");
 
     static_assert(vmprog_signed_descriptor_v1_0::struct_size ==
@@ -1076,9 +1089,15 @@ namespace lzx {
             !is_string_terminated(config.program_name, sizeof(config.program_name)) ||
             !is_string_terminated(config.author, sizeof(config.author)) ||
             !is_string_terminated(config.license, sizeof(config.license)) ||
-            !is_string_terminated(config.category, sizeof(config.category)) ||
             !is_string_terminated(config.description, sizeof(config.description))) {
             return vmprog_validation_result::string_not_terminated;
+        }
+
+        // Check category strings are null-terminated
+        for (uint8_t i = 0; i < config.category_count && i < vmprog_program_config_v1_0::max_categories; ++i) {
+            if (!is_string_terminated(config.categories[i], sizeof(config.categories[i]))) {
+                return vmprog_validation_result::string_not_terminated;
+            }
         }
 
         // Check required fields are non-empty
@@ -1103,10 +1122,18 @@ namespace lzx {
             return vmprog_validation_result::reserved_field_not_zero;
         }
 
-        // Verify reserved fields are zeroed
-        if (config.reserved_pad != 0) {
-            return vmprog_validation_result::reserved_field_not_zero;
+        // Validate category_count range
+        if (config.category_count == 0 || config.category_count > vmprog_program_config_v1_0::max_categories) {
+            return vmprog_validation_result::invalid_enum_value;
         }
+
+        // Validate program_type enum
+        if (config.program_type != vmprog_program_type_v1_0::processing &&
+            config.program_type != vmprog_program_type_v1_0::synthesis) {
+            return vmprog_validation_result::invalid_enum_value;
+        }
+
+        // Verify reserved fields are zeroed
         for (size_t i = 0; i < sizeof(config.reserved); ++i) {
             if (config.reserved[i] != 0) {
                 return vmprog_validation_result::reserved_field_not_zero;
@@ -1174,7 +1201,6 @@ namespace lzx {
         for (size_t i = 0; i < sizeof(config_copy.reserved); ++i) {
             config_copy.reserved[i] = 0;
         }
-        config_copy.reserved_pad = 0;
 
         // Zero reserved fields in used parameters only (for consistency with validation)
         for (uint32_t i = 0; i < config.parameter_count && i < vmprog_program_config_v1_0::num_parameters; ++i) {
@@ -1581,7 +1607,9 @@ namespace lzx {
         config.core_id = vmprog_core_id_v1_0::yuv444_30b;
         config.parameter_count = 0;
         config.preset_count = 0;
+        config.category_count = 0;
         config.supported_timings = 0; // 0 = all timings supported
+        config.program_type = vmprog_program_type_v1_0::processing;
     }
 
     /**

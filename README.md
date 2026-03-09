@@ -28,6 +28,7 @@ bash clean_programs.sh
 
 - [Program Development Guide](docs/program-development-guide.md) - Create VHDL programs
 - [TOML Configuration Guide](docs/toml-config-guide.md) - Define parameters
+- [Program Categories](docs/program-categories.md) - Category definitions
 - [VMPROG Format](docs/vmprog-format.md) - Package format spec
 - [ABI Format](docs/abi-format.md) - Hardware interface
 - [Package Signing](docs/package-signing-guide.md) - Ed25519 signing

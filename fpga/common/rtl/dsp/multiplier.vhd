@@ -39,10 +39,26 @@
 --   shift-and-add multiplication.
 --
 -- Pipeline Architecture:
---   - Input registration stage
---   - N/2 multiplication stages (where N = G_WIDTH), processing 2 bits per stage
---   - Output scaling, addition of z, and clamping stage
---   - Valid signal pipeline tracking dataflow
+--   - Stage 0: Input registration (1 cycle)
+--   - Stages 1..N: Radix-4 Booth multiplication (N = (G_WIDTH+1)/2 stages)
+--   - Final stage: Output scaling, z addition, and clamping (1 cycle)
+--   - Valid signal pipeline: N stages tracking dataflow
+--
+-- Latency (clock cycles from enable assertion to output):
+--   Valid signal:  (G_WIDTH+1)/2 + 2 cycles
+--   Data output:   (G_WIDTH+1)/2 + 3 cycles
+--
+--   Note: Valid leads result by 1 clock cycle. In streaming mode (enable
+--   held high continuously), both valid and result are correct after the
+--   data latency. For single-pulse enable, the result corresponding to
+--   a valid assertion appears 1 cycle after that valid pulse.
+--
+--   Example latencies:
+--     G_WIDTH=6:  valid=5,  data=6  cycles
+--     G_WIDTH=8:  valid=6,  data=7  cycles
+--     G_WIDTH=10: valid=7,  data=8  cycles
+--     G_WIDTH=12: valid=8,  data=9  cycles
+--     G_WIDTH=16: valid=10, data=11 cycles
 --
 -- Generic Parameters:
 --   G_WIDTH: Bit width of input/output data (signed)

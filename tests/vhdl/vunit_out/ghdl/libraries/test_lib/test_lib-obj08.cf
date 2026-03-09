@@ -1,13 +1,94 @@
 v 4
-file / "/home/lars/videomancer/videomancer-sdk/tests/vhdl/tb_blanking_yuv444.vhd" "6f847fc7b1d7a46d76ed23dcda6c403ad4b331e6" "20251217182430.177":
-  entity tb_blanking_yuv444 at 26( 1137) + 0 on 17;
-  architecture tb of tb_blanking_yuv444 at 41( 1421) + 0 on 18;
-file / "/home/lars/videomancer/videomancer-sdk/tests/vhdl/tb_yuv422_to_yuv444.vhd" "4b482ec6c0b59580177a9fad10b75779b8e11c3f" "20251217182430.082":
-  entity tb_yuv422_to_yuv444 at 26( 1162) + 0 on 13;
-  architecture tb of tb_yuv422_to_yuv444 at 42( 1473) + 0 on 14;
-file / "/home/lars/videomancer/videomancer-sdk/tests/vhdl/tb_yuv444_to_yuv422.vhd" "485e62aaf84cfebbace720dc36328f9de861f64a" "20251217182430.031":
-  entity tb_yuv444_to_yuv422 at 26( 1164) + 0 on 11;
-  architecture tb of tb_yuv444_to_yuv422 at 42( 1475) + 0 on 12;
-file / "/home/lars/videomancer/videomancer-sdk/tests/vhdl/tb_sync_slv.vhd" "2e6c70839d71d4fff3532c900990c29200bc5d8b" "20251217182430.127":
-  entity tb_sync_slv at 26( 1168) + 0 on 15;
-  architecture tb of tb_sync_slv at 39( 1377) + 0 on 16;
+file / "/home/lars/videomancer/videomancer-sdk/tests/vhdl/tb_resolution_pkg.vhd" "6e74524d18bdfa17be568ad2b744a9f04428d920" "20260308194318.082":
+  entity tb_resolution_pkg at 17( 687) + 0 on 119;
+  architecture tb of tb_resolution_pkg at 39( 1145) + 0 on 120;
+file / "/home/lars/videomancer/videomancer-sdk/tests/vhdl/tb_diff_multiplier_generics.vhd" "a283e523d4aca1779e1a5dd1b7e371f2194029f5" "20260308193416.820":
+  entity tb_diff_multiplier_generics at 14( 570) + 0 on 113;
+  architecture tb of tb_diff_multiplier_generics at 33( 942) + 0 on 114;
+file / "/home/lars/videomancer/videomancer-sdk/tests/vhdl/tb_lfsr_generics.vhd" "7af0baa004cc2a3a1e71c60d56fce47d231c10ec" "20260308192718.203":
+  entity tb_lfsr_generics at 9( 346) + 0 on 103;
+  architecture tb of tb_lfsr_generics at 25( 600) + 0 on 104;
+file / "/home/lars/videomancer/videomancer-sdk/tests/vhdl/tb_variable_filter_generics.vhd" "4505d5749470f8c624655aa0fcbc49cc46190363" "20260308193603.628":
+  entity tb_variable_filter_generics at 12( 534) + 0 on 115;
+  architecture tb of tb_variable_filter_generics at 28( 799) + 0 on 116;
+file / "/home/lars/videomancer/videomancer-sdk/tests/vhdl/tb_video_timing_gen.vhd" "3761c68375745f79f12f91adc26598881c2a0fc4" "20260308192124.064":
+  entity tb_video_timing_gen at 22( 886) + 0 on 95;
+  architecture tb of tb_video_timing_gen at 36( 1137) + 0 on 96;
+file / "/home/lars/videomancer/videomancer-sdk/tests/vhdl/tb_edge_detector.vhd" "e364650278922279bd3b3151a0b4fafdca9a822f" "20260308191717.670":
+  entity tb_edge_detector at 14( 611) + 0 on 93;
+  architecture tb of tb_edge_detector at 26( 799) + 0 on 94;
+file / "/home/lars/videomancer/videomancer-sdk/tests/vhdl/tb_lfsr.vhd" "6dabb685e59f29c89091d0ddfdf509f1bca5689b" "20260308191717.656":
+  entity tb_lfsr at 14( 461) + 0 on 91;
+  architecture tb of tb_lfsr at 27( 666) + 0 on 92;
+file / "/home/lars/videomancer/videomancer-sdk/tests/vhdl/tb_sin_cos_lut.vhd" "7467c250e98514003256902eec15a4ea6123462f" "20260308191415.113":
+  entity tb_sin_cos_lut at 16( 561) + 0 on 75;
+  architecture tb of tb_sin_cos_lut at 29( 773) + 0 on 76;
+file / "/home/lars/videomancer/videomancer-sdk/tests/vhdl/tb_variable_filter.vhd" "4cb596fd93ed93a2c16189def61c2f4b080b5eb8" "20260308191415.085":
+  entity tb_variable_filter at 20( 716) + 0 on 71;
+  architecture tb of tb_variable_filter at 33( 932) + 0 on 72;
+file / "/home/lars/videomancer/videomancer-sdk/tests/vhdl/tb_video_timing_accum.vhd" "56a2231975d8697974a6e03cfd97ade56496eaf9" "20260308191356.799":
+  entity tb_video_timing_accum at 22( 902) + 0 on 67;
+  architecture tb of tb_video_timing_accum at 36( 1155) + 0 on 68;
+file / "/home/lars/videomancer/videomancer-sdk/tests/vhdl/tb_multiplier.vhd" "0cefd9927c93555b2445e62dcbb1a4b21b2ad953" "20260308185946.089":
+  entity tb_multiplier at 27( 1222) + 0 on 55;
+  architecture tb of tb_multiplier at 40( 1433) + 0 on 56;
+file / "/home/lars/videomancer/videomancer-sdk/tests/vhdl/tb_spi_peripheral.vhd" "52b884fe4824ef9f42b7585636bbbcdce34a8f0c" "20260308183231.884":
+  entity tb_spi_peripheral at 27( 1243) + 0 on 47;
+  architecture tb of tb_spi_peripheral at 40( 1458) + 0 on 48;
+file / "/home/lars/videomancer/videomancer-sdk/tests/vhdl/tb_video_field_detector.vhd" "44fc95d9f5906760c5af72af531dced697706754" "20260308183001.173":
+  entity tb_video_field_detector at 27( 1213) + 0 on 37;
+  architecture tb of tb_video_field_detector at 40( 1434) + 0 on 38;
+file / "/home/lars/videomancer/videomancer-sdk/tests/vhdl/tb_sync_slv.vhd" "f746f97b2aa84533efcd97745d4f0199a8be8cb0" "20260308182358.496":
+  entity tb_sync_slv at 28( 1282) + 0 on 25;
+  architecture tb of tb_sync_slv at 41( 1491) + 0 on 26;
+file / "/home/lars/videomancer/videomancer-sdk/tests/vhdl/tb_yuv444_to_yuv422.vhd" "485e62aaf84cfebbace720dc36328f9de861f64a" "20260308182358.453":
+  entity tb_yuv444_to_yuv422 at 26( 1164) + 0 on 19;
+  architecture tb of tb_yuv444_to_yuv422 at 42( 1475) + 0 on 20;
+file / "/home/lars/videomancer/videomancer-sdk/tests/vhdl/tb_yuv422_to_yuv444.vhd" "a25b2fa6b6bb576eb9bdd096b3b22aaa7fcb1130" "20260308182358.469":
+  entity tb_yuv422_to_yuv444 at 26( 1162) + 0 on 21;
+  architecture tb of tb_yuv422_to_yuv444 at 42( 1473) + 0 on 22;
+file / "/home/lars/videomancer/videomancer-sdk/tests/vhdl/tb_blanking_yuv444.vhd" "6f847fc7b1d7a46d76ed23dcda6c403ad4b331e6" "20260308182358.569":
+  entity tb_blanking_yuv444 at 26( 1137) + 0 on 35;
+  architecture tb of tb_blanking_yuv444 at 41( 1421) + 0 on 36;
+file / "/home/lars/videomancer/videomancer-sdk/tests/vhdl/tb_proc_amp.vhd" "d306ffb7653ce12d872e63ddb84e6944dd5fb368" "20260308185946.061":
+  entity tb_proc_amp at 27( 1213) + 0 on 51;
+  architecture tb of tb_proc_amp at 40( 1422) + 0 on 52;
+file / "/home/lars/videomancer/videomancer-sdk/tests/vhdl/tb_interpolator.vhd" "d7fde19c60d5a3dba5114cf9aecff1239772f297" "20260308185946.117":
+  entity tb_interpolator at 27( 1255) + 0 on 59;
+  architecture tb of tb_interpolator at 40( 1468) + 0 on 60;
+file / "/home/lars/videomancer/videomancer-sdk/tests/vhdl/tb_proc_amp_generics.vhd" "f94e2d1867d0fe1c5838384b078925604c7eb1d5" "20260308190119.921":
+  entity tb_proc_amp_generics at 49( 2127) + 0 on 61;
+  architecture tb of tb_proc_amp_generics at 65( 2385) + 0 on 62;
+file / "/home/lars/videomancer/videomancer-sdk/tests/vhdl/tb_multiplier_generics.vhd" "ad8b91830386f4f5e2fba09f0117547c7bb4ddad" "20260308190119.939":
+  entity tb_multiplier_generics at 44( 2069) + 0 on 63;
+  architecture tb of tb_multiplier_generics at 63( 2436) + 0 on 64;
+file / "/home/lars/videomancer/videomancer-sdk/tests/vhdl/tb_interpolator_generics.vhd" "03e67201ca5d587f04e397181a58e217fe3e2d30" "20260308190119.954":
+  entity tb_interpolator_generics at 42( 2044) + 0 on 65;
+  architecture tb of tb_interpolator_generics at 61( 2410) + 0 on 66;
+file / "/home/lars/videomancer/videomancer-sdk/tests/vhdl/tb_video_line_buffer.vhd" "478bf2a088895778c41883d017310e5e08b3dd5e" "20260308191717.627":
+  entity tb_video_line_buffer at 21( 768) + 0 on 87;
+  architecture tb of tb_video_line_buffer at 34( 986) + 0 on 88;
+file / "/home/lars/videomancer/videomancer-sdk/tests/vhdl/tb_variable_delay.vhd" "fa5b5f671359117d720a66a0fed365f2028e9a4a" "20260308191717.642":
+  entity tb_variable_delay at 17( 679) + 0 on 89;
+  architecture tb of tb_variable_delay at 30( 894) + 0 on 90;
+file / "/home/lars/videomancer/videomancer-sdk/tests/vhdl/tb_lfsr16.vhd" "1bd91d84bd45d2be2581f9d6bca041bbf1946590" "20260308191415.127":
+  entity tb_lfsr16 at 13( 399) + 0 on 77;
+  architecture tb of tb_lfsr16 at 26( 606) + 0 on 78;
+file / "/home/lars/videomancer/videomancer-sdk/tests/vhdl/tb_frequency_doubler.vhd" "06458c2321b367986538190c601c7027969a3420" "20260308191415.157":
+  entity tb_frequency_doubler at 20( 717) + 0 on 81;
+  architecture tb of tb_frequency_doubler at 33( 935) + 0 on 82;
+file / "/home/lars/videomancer/videomancer-sdk/tests/vhdl/tb_diff_multiplier.vhd" "260b674df362b6e69fe6ec60c826f9748eb30e78" "20260308191415.185":
+  entity tb_diff_multiplier at 23( 883) + 0 on 85;
+  architecture tb of tb_diff_multiplier at 36( 1099) + 0 on 86;
+file / "/home/lars/videomancer/videomancer-sdk/tests/vhdl/tb_video_sync_gen.vhd" "173ef3da9f45482b092892b205e36755aa4f6b91" "20260308192400.148":
+  entity tb_video_sync_gen at 24( 1107) + 0 on 97;
+  architecture tb of tb_video_sync_gen at 39( 1388) + 0 on 98;
+file / "/home/lars/videomancer/videomancer-sdk/tests/vhdl/tb_variable_delay_generics.vhd" "2a44cef8f56c5644346e78050989c7c7e4ca98bb" "20260308193416.791":
+  entity tb_variable_delay_generics at 12( 516) + 0 on 109;
+  architecture tb of tb_variable_delay_generics at 29( 812) + 0 on 110;
+file / "/home/lars/videomancer/videomancer-sdk/tests/vhdl/tb_freq_doubler_generics.vhd" "0283cbcd44479e8e8b38375d8f0d72167ca8bf3c" "20260308193416.806":
+  entity tb_freq_doubler_generics at 12( 464) + 0 on 111;
+  architecture tb of tb_freq_doubler_generics at 28( 725) + 0 on 112;
+file / "/home/lars/videomancer/videomancer-sdk/tests/vhdl/tb_video_sync_gen_formats.vhd" "501bf926dbbd990595cab2d0a9ffd87d49e227ff" "20260308194318.068":
+  entity tb_video_sync_gen_formats at 15( 622) + 0 on 117;
+  architecture tb of tb_video_sync_gen_formats at 36( 1080) + 0 on 118;

@@ -1,0 +1,2 @@
+       100000000 fs - default              -    INFO - Testing back-to-back rapid write-read transactions
+simulation stopped @55600ns with status 0

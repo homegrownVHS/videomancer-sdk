@@ -1,0 +1,2 @@
+       100000000 fs - default              -    INFO - Testing auto-increment write across 4 registers
+simulation stopped @22100ns with status 0

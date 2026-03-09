@@ -1,0 +1,2 @@
+test_start:int_overflow_clamps_to_max
+test_suite_done

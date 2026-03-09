@@ -14,7 +14,8 @@ hardware_compatibility = ["rev_b"]
 core = "yuv444_30b"           # Optional, default yuv444_30b
 author = "Your Name"           # Optional
 license = "GPL-3.0"            # Optional
-category = "Effects"           # Optional
+categories = ["Color"]          # Optional — see program-categories.md
+program_type = "processing"    # Required — "processing" or "synthesis"
 description = "Description"   # Optional
 url = "https://example.com"   # Optional
 
@@ -45,10 +46,12 @@ label = "On"
 - `program_version` - SemVer format (e.g., "1.2.3")
 - `abi_version` - Range notation (e.g., ">=1.0,<2.0")
 - `hardware_compatibility` - Array of compatible platforms (e.g., ["rev_b"])
+- `program_type` - `"processing"` (transforms input video) or `"synthesis"` (generates output without input)
 
 **Optional:**
 - `core` - Core architecture: "yuv444_30b" (default) or "yuv422_20b"
-- `author`, `license`, `category` (max 31-63 chars)
+- `author`, `license` (max 31-63 chars)
+- `categories` - Array of up to 8 [predefined categories](program-categories.md) (max 31 chars each)
 - `description`, `url` (max 127 chars)
 - `supported_timings` - Array of video timing IDs the program supports (see below)
 
@@ -234,7 +237,8 @@ program_version = "1.0.0"
 abi_version = ">=1.0,<2.0"
 author = "Jane Doe"
 license = "MIT"
-category = "Video Processing"
+categories = ["Color"]
+program_type = "processing"
 description = "Advanced color processing with hue, saturation, and brightness controls."
 url = "https://github.com/example/colorizer"
 

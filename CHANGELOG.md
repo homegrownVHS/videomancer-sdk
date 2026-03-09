@@ -9,6 +9,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Multi-Category Support & Program Type** - Replaced singular category with multi-tag system
+  - `categories` field: array of up to 8 category tag strings (8×32 bytes) at offset 214
+  - `category_count` field: uint8_t at offset 729 (valid range 1–8)
+  - `program_type` field: uint8_t at offset 7916 (0=processing, 1=synthesis)
+  - New `vmprog_program_type_v1_0` enum with `processing` (0) and `synthesis` (1)
+  - Struct size increased from 7372 to 7936 bytes (reserved reduced from 20 to 19 bytes)
+  - 37 predefined categories validated against JSON schema
+  - Moved category definitions from repository root to SDK `docs/program-categories.md`
+  - All 343 program TOML files migrated from `category` string to `categories` array
+  - Updated all tools (toml-converter, vmprog-packer, toml-editor) with backward compatibility
+  - JSON schema updated with `categories` array and `program_type` enum constraints
 - **Core Architecture Field** - Added core_id field to vmprog_program_config_v1_0
   - New `vmprog_core_id_v1_0` enum: none (0), yuv444_30b (1), yuv422_20b (2)
   - Core architecture field at offset 82 (4 bytes)

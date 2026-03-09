@@ -26,7 +26,7 @@ python toml_to_config_binary.py my_program.toml program_config.bin --quiet
 
 ## Output Format
 
-The converter generates a fixed-size 7372-byte binary file containing:
+The converter generates a fixed-size 7936-byte binary file containing:
 
 - Program metadata (strings with null padding)
 - Parameter configurations

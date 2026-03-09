@@ -1,6 +1,6 @@
 -- Videomancer SDK - Open source FPGA-based video effects development kit
 -- Copyright (C) 2025 LZX Industries LLC
--- File: yuv444_30b_.vhd - YUV444 Blanking
+-- File: yuv444_30b_blanking.vhd - YUV444 Blanking
 -- License: GNU General Public License v3.0
 -- https://github.com/lzxindustries/videomancer-sdk
 --
@@ -16,6 +16,23 @@
 --
 -- You should have received a copy of the GNU General Public License
 -- along with this program. If not, see <https://www.gnu.org/licenses/>.
+--
+-- Description:
+--   Blanking insertion for YUV444 30-bit video streams. Replaces pixel data
+--   with black level (Y=0, U=512, V=512) during blanking intervals (avid='0').
+--   All sync signals pass through with the same 2-cycle delay as data.
+--
+-- Pipeline Architecture (2 stages, 2 clock cycles latency):
+--   Stage 0: Register all input signals (data + sync)
+--   Stage 1: Apply blanking (mux active data or black level based on avid),
+--            register all output signals
+--
+-- Latency:
+--   All outputs (Y, U, V, avid, hsync_n, vsync_n, field_n): 2 clock cycles
+--   Data and sync signals are aligned (arrive on the same clock edge).
+--
+-- Authors:
+--   Lars Larsen
 
 --------------------------------------------------------------------------------
 
@@ -24,7 +41,6 @@ use ieee.std_logic_1164.all;
 use ieee.numeric_std.all;
 
 library work;
-use work.video_timing_pkg.all;
 use work.video_stream_pkg.all;
 
 entity yuv444_30b_blanking is

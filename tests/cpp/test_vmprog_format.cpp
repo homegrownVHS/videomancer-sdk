@@ -24,9 +24,9 @@ bool test_struct_sizes() {
         return false;
     }
 
-    if (sizeof(vmprog_program_config_v1_0) != 7712) {
+    if (sizeof(vmprog_program_config_v1_0) != 7936) {
         std::cerr << "FAILED: Struct size test - program config size is "
-                  << sizeof(vmprog_program_config_v1_0) << ", expected 7712" << std::endl;
+                  << sizeof(vmprog_program_config_v1_0) << ", expected 7936" << std::endl;
         return false;
     }
 
@@ -1118,7 +1118,8 @@ bool test_validate_supported_timings_valid() {
     safe_strncpy(config.program_name, "TimingTest", sizeof(config.program_name));
     safe_strncpy(config.author, "Test", sizeof(config.author));
     safe_strncpy(config.license, "MIT", sizeof(config.license));
-    safe_strncpy(config.category, "Test", sizeof(config.category));
+    safe_strncpy(config.categories[0], "Test", sizeof(config.categories[0]));
+    config.category_count = 1;
     safe_strncpy(config.description, "Test", sizeof(config.description));
 
     // 0 = all => valid
@@ -1160,7 +1161,8 @@ bool test_validate_supported_timings_reserved_bit() {
     safe_strncpy(config.program_name, "TimingTest", sizeof(config.program_name));
     safe_strncpy(config.author, "Test", sizeof(config.author));
     safe_strncpy(config.license, "MIT", sizeof(config.license));
-    safe_strncpy(config.category, "Test", sizeof(config.category));
+    safe_strncpy(config.categories[0], "Test", sizeof(config.categories[0]));
+    config.category_count = 1;
     safe_strncpy(config.description, "Test", sizeof(config.description));
 
     // Bit 15 set => reserved_field_not_zero

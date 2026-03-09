@@ -1,6 +1,6 @@
 -- Videomancer SDK - Open source FPGA-based video effects development kit
 -- Copyright (C) 2025 LZX Industries LLC
--- File: interpolator_u.vhd - Pipelined Unsigned Interpolator
+-- File: interpolator.vhd - Pipelined Unsigned Interpolator
 -- License: GNU General Public License v3.0
 -- https://github.com/lzxindustries/videomancer-sdk
 --
@@ -41,6 +41,13 @@
 --   Stage 1: Compute signed difference (b - a), forward a and t
 --   Stage 2: Multiply difference by t factor
 --   Stage 3: Scale product, add back a, round, and clamp to output range
+--
+-- Latency (clock cycles from enable assertion to output):
+--   Valid signal:  4 cycles
+--   Data output:   4 cycles
+--
+--   Valid and data are synchronized (arrive on the same clock edge).
+--   Pipeline depth is constant and independent of generic parameters.
 --
 -- Generic Parameters:
 --   G_WIDTH: Bit width of input/output data (typically 8 or 10)
@@ -89,7 +96,6 @@ architecture rtl of interpolator_u is
   --------------------------------------------------------------------------------
   -- Constants
   --------------------------------------------------------------------------------
-  constant C_DATA_WIDTH         : integer                        := G_WIDTH;
   constant C_DIFF_WIDTH         : integer                        := G_WIDTH + 1;  -- Extra bit for signed difference
   constant C_PRODUCT_WIDTH      : integer                        := C_DIFF_WIDTH + G_FRAC_BITS + 1;  -- Full product width
   constant C_PIPELINE_STAGES    : integer                        := 4;  -- Total pipeline depth

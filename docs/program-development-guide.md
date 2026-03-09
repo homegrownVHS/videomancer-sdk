@@ -63,6 +63,8 @@ programs/
 
 Define your program's functionality:
 - What effect will it create?
+- Which [categories](program-categories.md) does it belong to? (up to 8 tags)
+- Is it a *processing* program (transforms input video) or a *synthesis* program (generates output from scratch)?
 - What parameters need user control?
 - What processing stages are needed?
 - What's the acceptable latency?

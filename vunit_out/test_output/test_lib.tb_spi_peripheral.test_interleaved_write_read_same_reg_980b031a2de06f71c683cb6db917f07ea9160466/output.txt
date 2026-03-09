@@ -1,0 +1,2 @@
+       100000000 fs - default              -    INFO - Testing write-read-write-read on same register
+simulation stopped @40100ns with status 0

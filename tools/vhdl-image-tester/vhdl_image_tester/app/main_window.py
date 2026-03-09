@@ -70,7 +70,14 @@ class MainWindow(QMainWindow):
     MIN_WIDTH    = 1100
     MIN_HEIGHT   = 700
 
-    def __init__(self) -> None:
+    def __init__(
+        self,
+        *,
+        initial_program: str | None = None,
+        initial_image: str | None = None,
+        initial_video_mode: str | None = None,
+        initial_decimation: int | None = None,
+    ) -> None:
         super().__init__()
         self._worker:         SimulationWorker | None = None
         self._current_program: Program | None         = None
@@ -78,6 +85,11 @@ class MainWindow(QMainWindow):
         self._output_image:    Image.Image | None     = None
         self._register_values: dict[str, int]         = {}
         self._last_run_dir:    Path | None            = None
+
+        self._initial_program    = initial_program
+        self._initial_image      = initial_image
+        self._initial_video_mode = initial_video_mode
+        self._initial_decimation = initial_decimation
 
         self._build_ui()
         self._apply_stylesheet()
@@ -197,6 +209,14 @@ class MainWindow(QMainWindow):
         self._interp_timer.timeout.connect(self._on_interp_tick)
         self._status_lbl = QLabel("Ready")
         self._status_bar.addWidget(self._status_lbl)
+
+        # Apply initial configuration before replaying signals.
+        self._program_panel.set_initial_config(
+            program=self._initial_program,
+            image=self._initial_image,
+            video_mode=self._initial_video_mode,
+            decimation=self._initial_decimation,
+        )
 
         # Replay initial selections — signals fired during ProgramPanel.__init__
         # were emitted before any slots were connected.
@@ -405,7 +425,7 @@ class MainWindow(QMainWindow):
         self.setWindowTitle(f"{self.WINDOW_TITLE} — {program.display_name}")
         self._log_panel.append(
             f"\n\u2500\u2500 Program loaded: {program.display_name} ({program.program_id}) \u2500\u2500\n"
-            f"   Category: {program.category}   Core: {program.core}\n"
+            f"   Category: {', '.join(program.categories)}   Core: {program.core}\n"
             f"   {len(program.parameters)} parameters   {len(program.vhd_files)} VHDL files"
             f"   {len(program.presets)} preset(s)"
         )

@@ -143,7 +143,7 @@ def _cmd_info(args: argparse.Namespace) -> int:
     print(f"Name:        {prog.name}")
     print(f"Program ID:  {prog.program_id}")
     print(f"Display:     {prog.program_name}")
-    print(f"Category:    {prog.category}")
+    print(f"Category:    {', '.join(prog.categories)}")
     print(f"Core:        {prog.core}")
     print(f"Description: {prog.description}")
     print(f"Author:      {prog.author}")
