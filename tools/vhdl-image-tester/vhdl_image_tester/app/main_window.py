@@ -29,7 +29,7 @@ from pathlib import Path
 
 from PIL import Image
 from PyQt6.QtCore import Qt, QTimer, pyqtSlot
-from PyQt6.QtGui import QAction, QFont, QKeySequence, QShortcut
+from PyQt6.QtGui import QAction, QCloseEvent, QFont, QKeySequence, QShortcut
 from PyQt6.QtWidgets import (
     QApplication,
     QFileDialog,
@@ -536,6 +536,19 @@ class MainWindow(QMainWindow):
             QMessageBox.warning(
                 self, "Delete Failed", f"Could not delete preset:\n{exc}"
             )
+
+    # ── Window lifecycle ─────────────────────────────────────────────────
+
+    def closeEvent(self, event: QCloseEvent) -> None:  # noqa: N802
+        """Ensure the simulation worker thread is stopped before the window
+        is destroyed, preventing 'QThread: Destroyed while thread is still
+        running' crashes."""
+        if self._worker is not None and self._worker.isRunning():
+            self._worker.terminate()
+            self._worker.wait(3000)
+            self._worker = None
+        self._interp_timer.stop()
+        super().closeEvent(event)
 
     @pyqtSlot()
     def _on_generate(self) -> None:

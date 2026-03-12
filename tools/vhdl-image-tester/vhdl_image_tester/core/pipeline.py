@@ -20,6 +20,7 @@ Two execution modes are provided:
 
 from __future__ import annotations
 
+import shutil
 import time
 import traceback
 from pathlib import Path
@@ -120,7 +121,11 @@ def run_pipeline(
         vs = resolve_video_settings(video_mode, decimation)
 
         # ── Build directory ──────────────────────────────────────────────────
+        # Clean stale GHDL artefacts (work library cache, object files) to
+        # prevent GHDL internal errors caused by mismatched .cf entries.
         run_dir = (build_dir or (BUILD_DIR / program.name))
+        if run_dir.exists():
+            shutil.rmtree(run_dir)
         run_dir.mkdir(parents=True, exist_ok=True)
 
         stim_path = run_dir / "stimulus.txt"

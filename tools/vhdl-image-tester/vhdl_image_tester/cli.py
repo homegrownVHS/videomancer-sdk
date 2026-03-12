@@ -9,7 +9,7 @@ All GUI features are available headlessly:
 
   lzx-vhdl-cli list           [--programs-dir DIR]
   lzx-vhdl-cli info  NAME     [--programs-dir DIR]
-  lzx-vhdl-cli simulate NAME  [--programs-dir DIR] [--image PATH]
+  lzx-vhdl-cli simulate NAME  [--programs-dir DIR] [--image PATH | omit for black]
                               [--video-mode MODE] [--decimation N]
                               [--warmup-frames N] [--capture-frames N]
                               [--set KEY=VALUE ...] [--import-regs PATH]
@@ -214,19 +214,21 @@ def _cmd_simulate(args: argparse.Namespace) -> int:
         print(f"[cli] ERROR: {exc}", file=sys.stderr)
         return 1
 
-    # Load source image
+    # Load source image (or generate a black frame for synthesis programs)
     image_path = Path(args.image) if args.image else None
-    if image_path is None:
-        print("[cli] ERROR: --image is required for the simulate sub-command.", file=sys.stderr)
-        return 1
-    if not image_path.exists():
-        print(f"[cli] ERROR: image not found: {image_path}", file=sys.stderr)
-        return 1
-    try:
-        source = Image.open(image_path).convert("RGB")
-    except Exception as exc:  # noqa: BLE001
-        print(f"[cli] ERROR: cannot open image: {exc}", file=sys.stderr)
-        return 1
+    if image_path is not None:
+        if not image_path.exists():
+            print(f"[cli] ERROR: image not found: {image_path}", file=sys.stderr)
+            return 1
+        try:
+            source = Image.open(image_path).convert("RGB")
+        except Exception as exc:  # noqa: BLE001
+            print(f"[cli] ERROR: cannot open image: {exc}", file=sys.stderr)
+            return 1
+    else:
+        # No source image — use a black frame (typical for synthesis programs)
+        source = Image.new("RGB", (1920, 1080), (0, 0, 0))
+        print("[cli] No --image provided; using black frame (synthesis mode).")
 
     # Assemble register values
     regs = _load_registers(
@@ -308,8 +310,9 @@ def _build_parser() -> argparse.ArgumentParser:
     p_sim = sub.add_parser("simulate", help="Run the full VHDL simulation pipeline.")
     p_sim.add_argument("name", help="Program name (e.g. cascade)")
     p_sim.add_argument(
-        "--image", "-i", metavar="PATH", required=True,
-        help="Source image file (PNG, JPEG, BMP, …)",
+        "--image", "-i", metavar="PATH", default=None,
+        help="Source image file (PNG, JPEG, BMP, …). "
+             "Omit for synthesis programs (a black frame is used).",
     )
     p_sim.add_argument(
         "--programs-dir", metavar="DIR", default=None,

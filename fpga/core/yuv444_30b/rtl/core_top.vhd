@@ -455,6 +455,7 @@ begin
 
     o_hdmi_tx_d(23 downto 14) <= s_video_out.y(9 downto 0);
     o_hdmi_tx_d(13 downto 4) <= s_video_out.c(9 downto 0);
+    o_hdmi_tx_d(3 downto 0) <= "0000";
     o_hdmi_tx_hsync <= s_video_out.hsync_n;
     o_hdmi_tx_vsync <= s_video_out.vsync_n;
     -- o_hdmi_tx_hsync <= s_o_hsync;
@@ -475,6 +476,7 @@ begin
 
     o_hdmi_tx_d(23 downto 14) <= s_video_out.y(9 downto 0);
     o_hdmi_tx_d(13 downto 4) <= s_video_out.c(9 downto 0);
+    o_hdmi_tx_d(3 downto 0) <= "0000";
     o_hdmi_tx_hsync <= s_video_out.hsync_n;
     o_hdmi_tx_vsync <= s_video_out.vsync_n;
     -- o_hdmi_tx_hsync <= s_o_hsync;
@@ -502,6 +504,7 @@ begin
 
     o_hdmi_tx_d(23 downto 14) <= s_video_out.y(9 downto 0);
     o_hdmi_tx_d(13 downto 4) <= s_video_out.c(9 downto 0);
+    o_hdmi_tx_d(3 downto 0) <= "0000";
     o_hdmi_tx_hsync <= s_video_out.hsync_n;
     o_hdmi_tx_vsync <= s_video_out.vsync_n;
     -- o_hdmi_tx_hsync <= s_o_hsync;
@@ -522,6 +525,7 @@ begin
 
     o_hdmi_tx_d(23 downto 14) <= s_video_out.y(9 downto 0);
     o_hdmi_tx_d(13 downto 4) <= s_video_out.c(9 downto 0);
+    o_hdmi_tx_d(3 downto 0) <= "0000";
     o_hdmi_tx_hsync <= s_video_out.hsync_n;
     o_hdmi_tx_vsync <= s_video_out.vsync_n;
     -- o_hdmi_tx_hsync <= s_o_hsync;
@@ -534,6 +538,7 @@ begin
 
     o_hdmi_tx_d(23 downto 14) <= s_video_out.y(9 downto 0);
     o_hdmi_tx_d(13 downto 4) <= s_video_out.c(9 downto 0);
+    o_hdmi_tx_d(3 downto 0) <= "0000";
     o_hdmi_tx_hsync <= s_video_out.hsync_n;
     o_hdmi_tx_vsync <= s_video_out.vsync_n;
     -- o_hdmi_tx_hsync <= s_o_hsync;
@@ -546,6 +551,7 @@ begin
 
     o_hdmi_tx_d(23 downto 14) <= s_video_out.y(9 downto 0);
     o_hdmi_tx_d(13 downto 4) <= s_video_out.c(9 downto 0);
+    o_hdmi_tx_d(3 downto 0) <= "0000";
     o_hdmi_tx_hsync <= s_video_out.hsync_n;
     o_hdmi_tx_vsync <= s_video_out.vsync_n;
     -- o_hdmi_tx_hsync <= s_o_hsync;
