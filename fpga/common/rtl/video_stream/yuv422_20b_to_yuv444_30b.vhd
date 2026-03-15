@@ -21,15 +21,14 @@
 --   Converts a YUV422 stream to a YUV444 stream with variable bit depth.
 --
 -- Pipeline Architecture:
---   Sync signals (hsync_n, vsync_n, avid, field_n): 2-cycle delay chain
---   Y data path: 3-cycle delay (input reg -> delay reg -> output reg)
---   U/V chroma: Phase-dependent pairing with 2-3 cycle latency
+--   All output signals are uniformly aligned to a 4-cycle delay from inputs.
+--   Sync signals (hsync_n, vsync_n, avid, field_n): 4-cycle delay chain
+--   Y data path: 4-cycle delay (input reg -> delay reg -> convert reg -> output reg)
+--   U/V chroma: 4-cycle delay (phase pairing at cycle 3, output reg at cycle 4)
 --
 -- Latency:
---   Sync outputs:  2 clock cycles from sync inputs
---   Y data output:  3 clock cycles from Y data input
---   Note: Sync signals arrive 1 clock cycle before the corresponding
---   Y data. This is by design to match downstream pipeline alignment.
+--   All outputs: 4 clock cycles from corresponding inputs
+--   Sync, Y, U, and V are perfectly aligned at the output.
 
 --------------------------------------------------------------------------------
 
@@ -55,15 +54,23 @@ architecture rtl of yuv422_20b_to_yuv444_30b is
     -- Constants
     constant C_BIT_DEPTH : integer := i_data.y'length;
 
-    -- Sync signal delay chain (2 cycles total)
+    -- Sync signal delay chain (4 cycles total)
     signal s_hsync_n_d1    : std_logic := '1';
     signal s_hsync_n_d2    : std_logic := '1';
+    signal s_hsync_n_d3    : std_logic := '1';
+    signal s_hsync_n_d4    : std_logic := '1';
     signal s_vsync_n_d1    : std_logic := '1';
     signal s_vsync_n_d2    : std_logic := '1';
+    signal s_vsync_n_d3    : std_logic := '1';
+    signal s_vsync_n_d4    : std_logic := '1';
     signal s_avid_d1       : std_logic := '0';
     signal s_avid_d2       : std_logic := '0';
+    signal s_avid_d3       : std_logic := '0';
+    signal s_avid_d4       : std_logic := '0';
     signal s_field_n_d1    : std_logic := '1';
     signal s_field_n_d2    : std_logic := '1';
+    signal s_field_n_d3    : std_logic := '1';
+    signal s_field_n_d4    : std_logic := '1';
 
     -- Phase control
     signal s_phase_reset   : std_logic := '0';
@@ -75,10 +82,15 @@ architecture rtl of yuv422_20b_to_yuv444_30b is
     signal s_yuv422_y_d1   : std_logic_vector(C_BIT_DEPTH - 1 downto 0) := (others => '0');
     signal s_yuv422_c_d1   : std_logic_vector(C_BIT_DEPTH - 1 downto 0) := (others => '0');
 
-    -- YUV444 output registers
+    -- YUV444 conversion registers (cycle 3)
     signal s_yuv444_y      : std_logic_vector(C_BIT_DEPTH - 1 downto 0) := (others => '0');
     signal s_yuv444_u      : std_logic_vector(C_BIT_DEPTH - 1 downto 0) := (others => '0');
     signal s_yuv444_v      : std_logic_vector(C_BIT_DEPTH - 1 downto 0) := (others => '0');
+
+    -- YUV444 output registers (cycle 4 — alignment stage)
+    signal s_yuv444_y_out  : std_logic_vector(C_BIT_DEPTH - 1 downto 0) := (others => '0');
+    signal s_yuv444_u_out  : std_logic_vector(C_BIT_DEPTH - 1 downto 0) := (others => '0');
+    signal s_yuv444_v_out  : std_logic_vector(C_BIT_DEPTH - 1 downto 0) := (others => '0');
 
 begin
 
@@ -89,15 +101,23 @@ begin
     process(clk)
     begin
         if rising_edge(clk) then
-            -- Sync signal delay chain (2 cycles total)
+            -- Sync signal delay chain (4 cycles total)
             s_hsync_n_d1 <= i_data.hsync_n;
             s_hsync_n_d2 <= s_hsync_n_d1;
+            s_hsync_n_d3 <= s_hsync_n_d2;
+            s_hsync_n_d4 <= s_hsync_n_d3;
             s_vsync_n_d1 <= i_data.vsync_n;
             s_vsync_n_d2 <= s_vsync_n_d1;
+            s_vsync_n_d3 <= s_vsync_n_d2;
+            s_vsync_n_d4 <= s_vsync_n_d3;
             s_avid_d1    <= i_data.avid;
             s_avid_d2    <= s_avid_d1;
+            s_avid_d3    <= s_avid_d2;
+            s_avid_d4    <= s_avid_d3;
             s_field_n_d1 <= i_data.field_n;
             s_field_n_d2 <= s_field_n_d1;
+            s_field_n_d3 <= s_field_n_d2;
+            s_field_n_d4 <= s_field_n_d3;
 
             -- Data path
             s_yuv422_y <= i_data.y;
@@ -114,8 +134,7 @@ begin
                 s_phase <= not s_phase;  -- Toggle phase each valid pixel
             end if;
 
-            -- YUV422 to YUV444 conversion
-            -- Y always passes through with 1 cycle delay
+            -- YUV422 to YUV444 conversion (cycle 3)
             s_yuv444_y <= s_yuv422_y_d1;
 
             if s_phase = '0' then
@@ -127,18 +146,23 @@ begin
                 s_yuv444_v <= s_yuv422_c;      -- Current sample to V
             end if;
 
+            -- Output alignment stage (cycle 4)
+            s_yuv444_y_out <= s_yuv444_y;
+            s_yuv444_u_out <= s_yuv444_u;
+            s_yuv444_v_out <= s_yuv444_v;
+
         end if;
     end process;
 
-    -- Output assignments
-    o_data.y <= s_yuv444_y;
-    o_data.u <= s_yuv444_u;
-    o_data.v <= s_yuv444_v;
+    -- Output assignments — all aligned to 4-cycle latency
+    o_data.y <= s_yuv444_y_out;
+    o_data.u <= s_yuv444_u_out;
+    o_data.v <= s_yuv444_v_out;
 
-    -- Sync outputs with 2-cycle delay
-    o_data.hsync_n <= s_hsync_n_d2;
-    o_data.vsync_n <= s_vsync_n_d2;
-    o_data.avid    <= s_avid_d2;
-    o_data.field_n <= s_field_n_d2;
+    -- Sync outputs with 4-cycle delay
+    o_data.hsync_n <= s_hsync_n_d4;
+    o_data.vsync_n <= s_vsync_n_d4;
+    o_data.avid    <= s_avid_d4;
+    o_data.field_n <= s_field_n_d4;
 
 end architecture rtl;

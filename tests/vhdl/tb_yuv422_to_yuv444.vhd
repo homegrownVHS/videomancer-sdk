@@ -129,7 +129,7 @@ begin
 
       -- Test 2: Sync signal propagation with correct delay
       elsif run("test_sync_delay") then
-        info("Testing sync signal propagation with 2-cycle delay");
+        info("Testing sync signal propagation with 4-cycle delay");
 
         -- Start with syncs inactive
         i_data.hsync_n <= '1';
@@ -147,17 +147,29 @@ begin
         check_equal(o_data.hsync_n, '1',
                    "HSYNC should not propagate after 1 cycle");
 
-        -- After 2 cycles, output hsync should be active
+        -- After 2 cycles, output hsync should still be high
+        wait for C_CLK_PERIOD;
+        wait for 1 ns;
+        check_equal(o_data.hsync_n, '1',
+                   "HSYNC should not propagate after 2 cycles");
+
+        -- After 3 cycles, output hsync should still be high
+        wait for C_CLK_PERIOD;
+        wait for 1 ns;
+        check_equal(o_data.hsync_n, '1',
+                   "HSYNC should not propagate after 3 cycles");
+
+        -- After 4 cycles, output hsync should be active
         wait for C_CLK_PERIOD;
         wait for 1 ns;
         check_equal(o_data.hsync_n, '0',
-                   "HSYNC should propagate after 2 cycles");
+                   "HSYNC should propagate after 4 cycles");
 
         -- Deactivate hsync
         i_data.hsync_n <= '1';
-        wait for 2 * C_CLK_PERIOD + 1 ns;
+        wait for 4 * C_CLK_PERIOD + 1 ns;
         check_equal(o_data.hsync_n, '1',
-                   "HSYNC deactivation should propagate after 2 cycles");
+                   "HSYNC deactivation should propagate after 4 cycles");
 
       -- Test 3: AVID control for phase reset
       elsif run("test_avid_phase_reset") then
@@ -214,13 +226,13 @@ begin
         -- Test field_n = 1 (first field)
         i_data.field_n <= '1';
         i_data.avid    <= '1';
-        wait for 3 * C_CLK_PERIOD + 1 ns;
+        wait for 5 * C_CLK_PERIOD + 1 ns;
         check_equal(o_data.field_n, '1',
                    "Field signal should propagate (field 1)");
 
         -- Test field_n = 0 (second field)
         i_data.field_n <= '0';
-        wait for 3 * C_CLK_PERIOD + 1 ns;
+        wait for 5 * C_CLK_PERIOD + 1 ns;
         check_equal(o_data.field_n, '0',
                    "Field signal should propagate (field 0)");
 
@@ -338,10 +350,10 @@ begin
 
       -- Test 11: VSYNC propagation
       elsif run("test_vsync_propagation") then
-        info("Testing VSYNC propagation with 2-cycle delay");
+        info("Testing VSYNC propagation with 4-cycle delay");
 
         i_data.vsync_n <= '1';
-        wait for 3 * C_CLK_PERIOD;
+        wait for 5 * C_CLK_PERIOD;
 
         i_data.vsync_n <= '0';
         wait for C_CLK_PERIOD;
@@ -351,13 +363,23 @@ begin
 
         wait for C_CLK_PERIOD;
         wait for 1 ns;
+        check_equal(o_data.vsync_n, '1',
+                   "VSYNC should not propagate after 2 cycles");
+
+        wait for C_CLK_PERIOD;
+        wait for 1 ns;
+        check_equal(o_data.vsync_n, '1',
+                   "VSYNC should not propagate after 3 cycles");
+
+        wait for C_CLK_PERIOD;
+        wait for 1 ns;
         check_equal(o_data.vsync_n, '0',
-                   "VSYNC should propagate after 2 cycles");
+                   "VSYNC should propagate after 4 cycles");
 
         i_data.vsync_n <= '1';
-        wait for 2 * C_CLK_PERIOD + 1 ns;
+        wait for 4 * C_CLK_PERIOD + 1 ns;
         check_equal(o_data.vsync_n, '1',
-                   "VSYNC deactivation should propagate after 2 cycles");
+                   "VSYNC deactivation should propagate after 4 cycles");
 
       end if;
 
