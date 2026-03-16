@@ -114,7 +114,7 @@ begin
         check_equal(unsigned(o_data.c), 240, "Second chroma (V)");
 
       elsif run("test_sync_delay") then
-        info("Testing sync signal propagation with 3-cycle delay");
+        info("Testing sync signal propagation with 2-cycle delay");
 
         i_data.hsync_n <= '1';
         i_data.avid    <= '0';
@@ -125,14 +125,11 @@ begin
         check_equal(o_data.hsync_n, '1', "HSYNC should not propagate after 1 cycle");
 
         wait for C_CLK_PERIOD;
-        check_equal(o_data.hsync_n, '1', "HSYNC should not propagate after 2 cycles");
-
-        wait for C_CLK_PERIOD;
-        check_equal(o_data.hsync_n, '0', "HSYNC should propagate after 3 cycles");
+        check_equal(o_data.hsync_n, '0', "HSYNC should propagate after 2 cycles");
 
         i_data.hsync_n <= '1';
-        wait for 3 * C_CLK_PERIOD + 1 ns;
-        check_equal(o_data.hsync_n, '1', "HSYNC deactivation after 3 cycles");
+        wait for 2 * C_CLK_PERIOD + 1 ns;
+        check_equal(o_data.hsync_n, '1', "HSYNC deactivation after 2 cycles");
 
       elsif run("test_phase_reset") then
         info("Testing phase reset on AVID rising edge");
@@ -176,11 +173,11 @@ begin
 
         i_data.field_n <= '1';
         i_data.avid    <= '1';
-        wait for 4 * C_CLK_PERIOD + 1 ns;
+        wait for 3 * C_CLK_PERIOD + 1 ns;
         check_equal(o_data.field_n, '1', "Field 1 should propagate");
 
         i_data.field_n <= '0';
-        wait for 4 * C_CLK_PERIOD + 1 ns;
+        wait for 3 * C_CLK_PERIOD + 1 ns;
         check_equal(o_data.field_n, '0', "Field 0 should propagate");
 
       end if;
