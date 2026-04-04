@@ -87,7 +87,7 @@ For developers creating new VHDL programs, see the **[Program Development Guide]
 
 ### Testing Programs Without Hardware
 
-The **VHDL Image Tester** (`tools/vhdl-image-tester/`) runs any Videomancer program as an authentic GHDL simulation against a still image. No FPGA hardware is needed.
+The **VHDL Image Tester** (`tools/vhdl-image-tester/`) runs any Videomancer program as an authentic GHDL simulation against a still image. No FPGA hardware is needed. It works both from a standalone SDK checkout and from within the Videomancer firmware repository.
 
 ```bash
 # GUI

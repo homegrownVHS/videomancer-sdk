@@ -14,36 +14,52 @@ from pathlib import Path
 # Repository root detection
 # ---------------------------------------------------------------------------
 
-def _find_repo_root() -> Path:
-    """Walk up from this file until we find the Videomancer repository root.
+def _find_repo_root() -> tuple[Path, bool]:
+    """Walk up from this file to find the repository root.
 
-    Looks for a directory that contains both ``programs/`` and
-    ``videomancer-sdk/``.  When the SDK is checked out as a submodule inside a
-    Videomancer firmware repository this will resolve to the firmware root,
-    which is the expected runtime context.  The tool cannot function when run
-    from a standalone SDK clone — a ``programs/`` directory is required.
+    Two layouts are supported:
+
+    1. **Firmware repository** — the SDK is a submodule.  The root contains
+       both ``programs/`` and ``videomancer-sdk/``.
+    2. **Standalone SDK** — the tool is run directly from the SDK checkout.
+       The root contains ``fpga/`` and ``tools/vhdl-image-tester/`` but
+       *not* ``videomancer-sdk/``.
+
+    Returns:
+        A ``(root, is_sdk_standalone)`` tuple.
     """
     candidate = Path(__file__).resolve()
     for _ in range(10):
         candidate = candidate.parent
+        # Firmware repo: has both programs/ and videomancer-sdk/
         if (candidate / "programs").is_dir() and (candidate / "videomancer-sdk").is_dir():
-            return candidate
+            return candidate, False
+        # Standalone SDK: has fpga/ and tools/vhdl-image-tester/ but no
+        # videomancer-sdk/ subdirectory (because *it is* the SDK).
+        if (
+            (candidate / "fpga").is_dir()
+            and (candidate / "tools" / "vhdl-image-tester").is_dir()
+            and not (candidate / "videomancer-sdk").is_dir()
+        ):
+            return candidate, True
     raise RuntimeError(
-        "Cannot locate Videomancer repository root. "
-        "The VHDL Image Tester must be run from within a Videomancer firmware "
-        "repository that contains both a 'programs/' directory and the "
-        "'videomancer-sdk/' submodule. "
-        "Standalone SDK checkouts are not supported by this tool."
+        "Cannot locate repository root. "
+        "The VHDL Image Tester must be run either from within a Videomancer "
+        "firmware repository (containing 'programs/' and 'videomancer-sdk/') "
+        "or directly from a standalone Videomancer SDK checkout "
+        "(containing 'fpga/' and 'tools/vhdl-image-tester/')."
     )
 
 
-REPO_ROOT: Path = _find_repo_root()
+REPO_ROOT: Path
+SDK_STANDALONE: bool
+REPO_ROOT, SDK_STANDALONE = _find_repo_root()
 
 # ---------------------------------------------------------------------------
 # SDK paths
 # ---------------------------------------------------------------------------
 
-SDK_ROOT: Path = REPO_ROOT / "videomancer-sdk"
+SDK_ROOT: Path = REPO_ROOT if SDK_STANDALONE else REPO_ROOT / "videomancer-sdk"
 SDK_FPGA: Path = SDK_ROOT / "fpga"
 
 SDK_VHDL_SOURCES: dict[str, list[Path]] = {
@@ -69,6 +85,9 @@ SDK_CORE_YUV444_DIR: Path = SDK_FPGA / "core/yuv444_30b/rtl"
 # Set this environment variable (or use the wrapper scripts in ``tools/``) to
 # point the tool at a custom programs directory without changing the working
 # directory.  Both GUI and CLI modes respect this setting.
+#
+# In firmware-repo mode the default is ``<repo>/programs``.
+# In standalone-SDK mode the default is ``<sdk>/programs`` (example programs).
 PROGRAMS_ROOT: Path = Path(
     os.environ["LZX_VIT_PROGRAMS_DIR"]
     if "LZX_VIT_PROGRAMS_DIR" in os.environ
@@ -79,7 +98,16 @@ PROGRAMS_ROOT: Path = Path(
 # Test image paths
 # ---------------------------------------------------------------------------
 
-TEST_IMAGES_ROOT: Path = REPO_ROOT / "docs/test_images"
+# ``LZX_VIT_TEST_IMAGES_DIR`` overrides the auto-detected test images
+# directory.  In firmware-repo mode the default is ``<repo>/docs/test_images``.
+# In standalone-SDK mode no test images ship by default so the path may not
+# exist — consumers handle this gracefully.
+TEST_IMAGES_ROOT: Path = Path(
+    os.environ.get(
+        "LZX_VIT_TEST_IMAGES_DIR",
+        str(REPO_ROOT / "docs/test_images"),
+    )
+)
 
 # ---------------------------------------------------------------------------
 # Simulation build directory (under system tmp)

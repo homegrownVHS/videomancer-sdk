@@ -2,7 +2,7 @@
 
 A PyQt6 GUI application that runs any Videomancer FPGA program as an **authentic GHDL simulation** on a user-selected still image and displays the processed output side-by-side with the original.
 
-Part of the [Videomancer SDK](https://github.com/lzxindustries/videomancer-sdk). Requires a Videomancer repository checkout that includes the `programs/` directory.
+Part of the [Videomancer SDK](https://github.com/lzxindustries/videomancer-sdk). Works both from a standalone SDK checkout and from within the full Videomancer firmware repository.
 
 ---
 
@@ -63,24 +63,47 @@ All Python dependencies are installed automatically by the launchers below.
 
 ## Installation & Quick Start
 
-### Linux / macOS
+### Standalone SDK checkout
 
 ```bash
-# From the Videomancer repository root:
+# Clone the SDK:
+git clone https://github.com/lzxindustries/videomancer-sdk.git
 cd videomancer-sdk/tools/vhdl-image-tester
 
 # First-time setup — creates .venv and installs all dependencies:
 ./run.sh --install
 
-# Launch the application:
+# Launch (uses the SDK example programs in programs/):
 ./run.sh
 ```
+
+The tool auto-detects that it is running inside the SDK and resolves all
+FPGA source paths relative to the SDK root. The `programs/` directory at
+the SDK root (containing example programs like `passthru` and
+`yuv_amplifier`) is used by default.
+
+### Firmware repository (SDK as submodule)
+
+```bash
+# From the firmware repository root:
+cd videomancer-sdk/tools/vhdl-image-tester
+
+# First-time setup:
+./run.sh --install
+
+# Launch (uses firmware programs/ by default):
+./run.sh
+```
+
+When running inside a firmware repository the tool resolves the SDK FPGA
+sources via `videomancer-sdk/fpga/` and defaults `programs/` to the
+firmware repo's full program library.
 
 ### Windows
 
 ```bat
-rem From the Videomancer repository root:
-cd videomancer-sdk\tools\vhdl-image-tester
+rem From the SDK or firmware repository root:
+cd tools\vhdl-image-tester
 
 rem First-time setup — creates .venv and installs all dependencies:
 run.bat --install
@@ -93,7 +116,7 @@ run.bat
 
 ```bash
 # Install into the current Python environment:
-pip install -e videomancer-sdk/tools/vhdl-image-tester/
+pip install -e tools/vhdl-image-tester/
 
 # Launch:
 lzx-vhdl-tester
@@ -102,8 +125,7 @@ lzx-vhdl-tester
 ### Run without installing (convenience launcher)
 
 ```bash
-# From the Videomancer repository root:
-python videomancer-sdk/tools/vhdl-image-tester/run.py
+python tools/vhdl-image-tester/run.py
 ```
 
 ---
@@ -322,6 +344,7 @@ Override the programs directory with the `LZX_VIT_PROGRAMS_DIR` environment vari
 |---|---|---|
 | `LZX_VIT_BUILD_DIR` | `/tmp/lzx_vit` | GHDL working directory |
 | `LZX_VIT_PROGRAMS_DIR` | `<repo>/programs` | Programs source directory |
+| `LZX_VIT_TEST_IMAGES_DIR` | `<repo>/docs/test_images` | Test images directory (may not exist in standalone SDK) |
 | `LZX_VIT_GHDL` | (auto-detect) | Force a specific GHDL binary path (e.g. `/usr/bin/ghdl-llvm`) |
 
 ---
@@ -443,8 +466,8 @@ Options:
 | Symptom | Likely cause | Fix |
 |---------|--------------|-----|
 | `ghdl: command not found` | GHDL not on PATH | `sudo apt install ghdl-llvm` (recommended) or add OSS CAD Suite to PATH |
-| `Cannot locate Videomancer repository root` | Tool run outside repo tree | Run from within the Videomancer repository |
-| `No programs found` | `programs/` directory empty or missing | Ensure you are running from a full Videomancer repo checkout |
+| `Cannot locate repository root` | Tool run outside repo tree | Run from within the SDK or Videomancer firmware repository |
+| `No programs found` | `programs/` directory empty or missing | In the SDK, ensure `programs/` contains at least one example program. In the firmware repo, ensure you have a full checkout. Override with `LZX_VIT_PROGRAMS_DIR` |
 | `ModuleNotFoundError: PyQt6` | Dependencies not installed | Run `./run.sh --install` (or `run.bat --install`) |
 | Simulation hangs | Program requires many warmup frames | Increase **Warmup frames** in settings |
 | Simulation very slow | Using mcode backend | Install LLVM backend: `sudo apt install ghdl-llvm` (5–20× speedup) |
@@ -455,13 +478,13 @@ Options:
 
 ```bash
 # Install in editable mode with dev extras (linters, type checker, test runner):
-pip install -e "videomancer-sdk/tools/vhdl-image-tester/[dev]"
+pip install -e "tools/vhdl-image-tester/[dev]"
 
 # Run linter:
-cd videomancer-sdk/tools/vhdl-image-tester && ./run.sh --lint
+cd tools/vhdl-image-tester && ./run.sh --lint
 
 # Run tests:
-cd videomancer-sdk/tools/vhdl-image-tester && ./run.sh --test
+cd tools/vhdl-image-tester && ./run.sh --test
 ```
 
 ---

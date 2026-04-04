@@ -273,7 +273,8 @@ if needed. See [Bitstream Compression](bitstream-compression.md).
 
 The **VHDL Image Tester** (`tools/vhdl-image-tester/`) lets you run any
 Videomancer program as an **authentic GHDL simulation** on a still image and
-inspect the processed result — no FPGA hardware required.
+inspect the processed result — no FPGA hardware required. It works both from
+a standalone SDK checkout and from within the Videomancer firmware repository.
 
 The tester analyses every SDK package and your program's VHDL source files,
 elaborates a testbench, and drives the DUT clock-by-clock using a BT.601-

@@ -44,7 +44,7 @@ bash clean_programs.sh
 
 ## Testing Programs
 
-The **VHDL Image Tester** lets you verify a program's behaviour on still images without FPGA hardware, using authentic GHDL simulation of the full SDK source tree.
+The **VHDL Image Tester** lets you verify a program's behaviour on still images without FPGA hardware, using authentic GHDL simulation of the full SDK source tree. It works both from a standalone SDK checkout and from within the Videomancer firmware repository.
 
 **GUI** (interactive before/after viewer):
 
@@ -73,6 +73,8 @@ lzx-vhdl-cli simulate yuv_amplifier \
 lzx-vhdl-cli export-regs yuv_amplifier --output regs.json
 lzx-vhdl-cli simulate yuv_amplifier --image photo.png --import-regs regs.json
 ```
+
+When running from a standalone SDK checkout, the example programs in `programs/` are used by default. Override with `--programs-dir` or `LZX_VIT_PROGRAMS_DIR`.
 
 See the [VHDL Image Tester README](tools/vhdl-image-tester/README.md) for full installation instructions, all CLI options, keyboard shortcuts, and troubleshooting.
 
