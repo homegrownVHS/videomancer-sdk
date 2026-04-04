@@ -99,13 +99,14 @@ PROGRAMS_ROOT: Path = Path(
 # ---------------------------------------------------------------------------
 
 # ``LZX_VIT_TEST_IMAGES_DIR`` overrides the auto-detected test images
-# directory.  In firmware-repo mode the default is ``<repo>/docs/test_images``.
-# In standalone-SDK mode no test images ship by default so the path may not
-# exist — consumers handle this gracefully.
+# directory.  In firmware-repo mode the default is
+# ``<repo>/lfs/library/stock/test-images``.  In standalone-SDK mode no test
+# images ship by default so the path may not exist — consumers handle this
+# gracefully.
 TEST_IMAGES_ROOT: Path = Path(
     os.environ.get(
         "LZX_VIT_TEST_IMAGES_DIR",
-        str(REPO_ROOT / "docs/test_images"),
+        str(REPO_ROOT / "lfs/library/stock/test-images"),
     )
 )
 

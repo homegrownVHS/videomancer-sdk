@@ -137,7 +137,7 @@ python tools/vhdl-image-tester/run.py
 1. Launch the application using any method above.
 2. **(Optional)** Click the **`…`** button next to the **Folder** row at the top of the FPGA Program panel to choose a different programs source directory. By default the tool uses the `programs/` directory at the repository root.
 3. Select a **program** from the dropdown (populated from the programs folder).
-4. Select a **source image** from the file browser (or use a test image from `docs/test_images/`).
+4. Select a **source image** from the file browser (or use a test image from `lfs/library/stock/test-images/`).
 5. Adjust **register sliders and toggles** to set control values.
 6. **(Optional)** If the program defines factory presets, use the **Preset** dropdown
    above the register controls to load a preset by name. All sliders and toggles
@@ -161,7 +161,7 @@ lzx-vhdl-cli info cascade
 
 # Run the full VHDL simulation pipeline
 lzx-vhdl-cli simulate cascade \
-    --image docs/test_images/kodim23.png \
+    --image lfs/library/stock/test-images/kodim23.png \
     --output result.png
 
 # Override register values inline
@@ -344,7 +344,7 @@ Override the programs directory with the `LZX_VIT_PROGRAMS_DIR` environment vari
 |---|---|---|
 | `LZX_VIT_BUILD_DIR` | `/tmp/lzx_vit` | GHDL working directory |
 | `LZX_VIT_PROGRAMS_DIR` | `<repo>/programs` | Programs source directory |
-| `LZX_VIT_TEST_IMAGES_DIR` | `<repo>/docs/test_images` | Test images directory (may not exist in standalone SDK) |
+| `LZX_VIT_TEST_IMAGES_DIR` | `<repo>/lfs/library/stock/test-images` | Test images directory (may not exist in standalone SDK) |
 | `LZX_VIT_GHDL` | (auto-detect) | Force a specific GHDL binary path (e.g. `/usr/bin/ghdl-llvm`) |
 
 ---
@@ -365,7 +365,7 @@ you do not need to pass `--programs-dir` manually.
 
 # CLI
 ./tools/run-vhdl-tester.sh list
-./tools/run-vhdl-tester.sh simulate cascade --image docs/test_images/img.png --output out.png
+./tools/run-vhdl-tester.sh simulate cascade --image lfs/library/stock/test-images/img.png --output out.png
 ./tools/run-vhdl-tester.sh simulate cascade --set rotary_potentiometer_1=800 --image photo.png
 ./tools/run-vhdl-tester.sh export-regs cascade --output cascade_regs.json
 ```
@@ -379,7 +379,7 @@ tools\run-vhdl-tester.bat --install
 
 rem CLI
 tools\run-vhdl-tester.bat list
-tools\run-vhdl-tester.bat simulate cascade --image docs\test_images\img.png --output out.png
+tools\run-vhdl-tester.bat simulate cascade --image lfs\library\stock\test-images\img.png --output out.png
 ```
 
 ---

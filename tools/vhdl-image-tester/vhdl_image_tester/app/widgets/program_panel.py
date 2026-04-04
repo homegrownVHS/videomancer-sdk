@@ -5,7 +5,7 @@
 """
 ProgramPanel: composite widget for selecting:
   - FPGA program (dropdown populated from programs/)
-  - Test image source (dropdown + browse, populated from docs/test_images/)
+  - Test image source (dropdown + browse, populated from lfs/library/stock/test-images/)
   - Video mode (15 ABI standards)
   - Decimation (resolution divisor)
   - Warmup frames (0+, with +/− buttons)

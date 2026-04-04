@@ -300,7 +300,7 @@ python tools/vhdl-image-tester/run.py
 
 **Workflow:**
 1. Select your program from the dropdown.
-2. Select a source image (test images are in `docs/test_images/`).
+2. Select a source image (test images are in `lfs/library/stock/test-images/`).
 3. Adjust register sliders to the values you want to test.
 4. Press **F5** to simulate. Before/after images appear side-by-side.
 
@@ -320,12 +320,12 @@ lzx-vhdl-cli info your_program
 
 # Run a simulation and save the result
 lzx-vhdl-cli simulate your_program \
-    --image docs/test_images/kodim23.png \
+    --image lfs/library/stock/test-images/kodim23.png \
     --output result.png
 
 # Override specific registers
 lzx-vhdl-cli simulate your_program \
-    --image docs/test_images/kodim23.png \
+    --image lfs/library/stock/test-images/kodim23.png \
     --set rotary_potentiometer_1=800 \
     --set toggle_switch_7=1023 \
     --output result.png
@@ -333,7 +333,7 @@ lzx-vhdl-cli simulate your_program \
 # Export defaults → edit → re-import for reproducible test cases
 lzx-vhdl-cli export-regs your_program --output your_program_regs.json
 lzx-vhdl-cli simulate your_program \
-    --image docs/test_images/kodim23.png \
+    --image lfs/library/stock/test-images/kodim23.png \
     --import-regs your_program_regs.json \
     --output result.png
 ```

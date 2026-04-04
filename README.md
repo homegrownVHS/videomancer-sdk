@@ -61,11 +61,11 @@ cd tools/vhdl-image-tester
 lzx-vhdl-cli list
 
 # Simulate and save output
-lzx-vhdl-cli simulate passthru --image docs/test_images/your_image.png --output result.png
+lzx-vhdl-cli simulate passthru --image lfs/library/stock/test-images/your_image.png --output result.png
 
 # Override register values
 lzx-vhdl-cli simulate yuv_amplifier \
-    --image docs/test_images/your_image.png \
+    --image lfs/library/stock/test-images/your_image.png \
     --set rotary_potentiometer_1=750 \
     --output result.png
 
