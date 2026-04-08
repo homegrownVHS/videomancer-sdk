@@ -30,12 +30,8 @@ initial_value = 512            # Optional, default 512
 [[parameter]]
 parameter_id = "toggle_switch_7"
 name_label = "Mode"
-[[parameter.value_label]]      # Label mode
-value = 0
-label = "Off"
-[[parameter.value_label]]
-value = 1
-label = "On"
+value_labels = ["Off", "On"]
+initial_value_label = "Off"
 ```
 
 ## Program Fields
@@ -132,7 +128,7 @@ Up to 12 parameters. Each requires:
 
 ### Label Mode
 
-Define `[[parameter.value_label]]` sections with `value` (0-1023) and `label` (max 31 chars). Up to 256 labels per parameter.
+Use a `value_labels` array of strings (2–16 labels, max 31 characters each). The hardware range is divided evenly across labels. Mutually exclusive with numeric mode fields.
 
 ## Tools
 

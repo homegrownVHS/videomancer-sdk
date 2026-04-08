@@ -31,7 +31,7 @@ If no schema is provided, the validator uses:
 
 ## Requirements
 
-- Python 3.7 or later
+- Python 3.10 or later
 - `jsonschema` library: `pip install jsonschema`
 - TOML library (built-in for Python 3.11+, or install `tomli` for earlier versions)
 

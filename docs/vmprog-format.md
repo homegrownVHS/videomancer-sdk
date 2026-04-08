@@ -159,7 +159,7 @@ All structures use `#pragma pack(push, 1)` for byte-aligned packing.
 | 20 | uint32_t | toc_offset | 4 | TOC offset from file start |
 | 24 | uint32_t | toc_bytes | 4 | TOC size in bytes |
 | 28 | uint32_t | toc_count | 4 | Number of TOC entries |
-| 32 | uint8_t[32] | sha256_package | 32 | Package hash (optional) |
+| 32 | uint8_t[32] | sha256_package | 32 | BLAKE2b-256 hash of entire file (optional) |
 
 **Constants:**
 
@@ -215,7 +215,7 @@ Used in signed descriptors to link artifacts:
 | Offset | Type | Field | Size | Description |
 |-------:|------|-------|-----:|-------------|
 | 0 | uint32_t | type | 4 | Artifact type |
-| 4 | uint8_t[32] | sha256 | 32 | SHA-256 hash |
+| 4 | uint8_t[32] | sha256 | 32 | BLAKE2b-256 hash of artifact payload |
 
 **Constants:**
 
@@ -405,7 +405,7 @@ vmprog_validation_result verify_all_payload_hashes(const uint8_t* file_data, uin
 void calculate_data_hash(const uint8_t* data, uint32_t size, uint8_t out_hash[32]);
 ```
 
-SHA-256 hashing and verification. All `out_hash` buffers must be 32 bytes.
+BLAKE2b-256 hashing and verification (C++ API uses `sha256` naming for compatibility). All `out_hash` buffers must be 32 bytes.
 
 ### 6.2 Signature Functions
 
@@ -1045,6 +1045,6 @@ printf("%s\n", config.program_name);  // DANGEROUS
 
 **Implementation:** [vmprog_format.hpp](../src/lzx/videomancer/vmprog_format.hpp) | [vmprog_crypto.hpp](../src/lzx/videomancer/vmprog_crypto.hpp) | [vmprog_public_keys.hpp](../src/lzx/videomancer/vmprog_public_keys.hpp)
 
-**Standards:** SHA-256 (FIPS 180-4) | Ed25519 (RFC 8032) | Monocypher 4.x
+**Standards:** BLAKE2b-256 (RFC 7693) | Ed25519 (RFC 8032) | Monocypher 4.x
 
 **Version:** 1.0 (2024-2025) - Initial production release

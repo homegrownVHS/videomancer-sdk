@@ -19,10 +19,10 @@ bash build_programs.sh
 # Clean build artifacts
 bash clean_programs.sh
 
-# Output: out/*.vmprog
+# Output: out/<hardware>/<program>.vmprog
 ```
 
-**Requirements:** Linux, Windows (WSL2), or macOS (Homebrew) | Python 3.7+ | ~2 GB disk space
+**Requirements:** Linux, Windows (WSL2), or macOS (Homebrew) | Python 3.10+ | ~2 GB disk space
 
 ## Documentation
 
@@ -80,8 +80,18 @@ See the [VHDL Image Tester README](tools/vhdl-image-tester/README.md) for full i
 
 ## Examples
 
-- `programs/passthru/` - Minimal pass-through program
-- `programs/yuv_amplifier/` - Multi-parameter processor
+The SDK ships with ten example programs of varying complexity:
+
+- `programs/passthru/` - Minimal pass-through (no processing)
+- `programs/yuv_amplifier/` - YUV brightness, contrast, and hue adjustment
+- `programs/colorbars/` - Reference color bar generator (EBU/SMPTE)
+- `programs/pong/` - Classic two-player Pong with AI opponent
+- `programs/perlin/` - Gradient noise synthesizer with animated palettes
+- `programs/mycelium/` - Reaction-diffusion organic pattern growth
+- `programs/sabattier/` - Pseudo-solarization with Mackie line edge glow
+- `programs/stic/` - Intellivision STIC retro 16-color palette quantizer
+- `programs/howler/` - Video feedback loop with zoom, decay, and hue rotation
+- `programs/kintsugi/` - Gold crack-repair edge overlay
 
 ## License
 

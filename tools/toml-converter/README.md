@@ -82,7 +82,7 @@ echo "✓ Binary config generated successfully"
 
 ## Dependencies
 
-Requires Python 3.7+ with TOML parsing library:
+Requires Python 3.10+ with TOML parsing library:
 
 ```bash
 # Install tomli for Python < 3.11

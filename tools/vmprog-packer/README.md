@@ -9,7 +9,7 @@
 - ✅ Creates complete `.vmprog` package files from input directory
 - ✅ Supports all six bitstream variants (SD/HD × Analog/HDMI/Dual)
 - ✅ **Ed25519 cryptographic signing** with automatic key loading
-- ✅ Calculates SHA-256 hashes for all payloads
+- ✅ Calculates BLAKE2b-256 hashes for all payloads
 - ✅ Generates proper TOC (Table of Contents) entries
 - ✅ Validates package structure against format specification
 - ✅ Verifies all hashes after package creation
@@ -18,7 +18,7 @@
 
 ## Requirements
 
-- Python 3.7 or higher
+- Python 3.10 or higher
 - Standard library (no dependencies for basic functionality)
 - **Optional:** `cryptography` library for Ed25519 signing
 - **Configuration:** TOML files defining program parameters (see [TOML Configuration Guide](../../docs/toml-config-guide.md))
@@ -44,32 +44,55 @@ python vmprog_pack.py <input_dir> <output_file.vmprog>
 ### Command-Line Options
 
 ```bash
-python vmprog_pack.py [-h] [--no-sign] [--keys-dir KEYS_DIR] input_dir output_file
+python vmprog_pack.py [-h] [--no-sign] [--keys-dir KEYS_DIR] [--hardware HW]
+                      [--toml-path PATH] [--compress] [--no-compress]
+                      [--compress-level N] input_dir output_file
 
 positional arguments:
-  input_dir             Input directory containing program_config.bin and bitstreams/
-  output_file           Output .vmprog file path
+  input_dir               Input directory containing program_config.bin and bitstreams/
+  output_file             Output .vmprog file path
 
 optional arguments:
-  -h, --help            Show help message
-  --no-sign             Do not sign the package (create unsigned package)
-  --keys-dir KEYS_DIR   Directory containing Ed25519 keys (default: ./keys)
+  -h, --help              Show help message
+  --no-sign               Do not sign the package (create unsigned package)
+  --keys-dir KEYS_DIR     Directory containing Ed25519 keys (default: <SDK_ROOT>/keys/)
+  --hardware HW           Hardware name to build for (e.g., rev_a). Validates against
+                          hardware_compatibility field in the TOML config
+  --toml-path PATH        Path to program TOML file for hardware validation
+  --compress              Compress bitstream payloads with DEFLATE (default: enabled)
+  --no-compress           Disable bitstream compression
+  --compress-level N      Compression level 1-9 (default: 9, best compression)
 ```
+
+> **Note:** When `--keys-dir` is not specified, the tool resolves the default key directory
+> relative to its own location in the SDK: `<SDK_ROOT>/keys/`. This works whether the SDK
+> is used standalone or as a submodule.
 
 ### Examples
 
+All examples assume you are running from the SDK root directory.
+
 ```bash
+# Run from SDK root:
+
 # Create signed package (default behavior)
-python vmprog_pack.py ./build/programs/passthru ./output/passthru.vmprog
+python tools/vmprog-packer/vmprog_pack.py ./build/programs/passthru ./output/passthru.vmprog
 
 # Create unsigned package
-python vmprog_pack.py --no-sign ./build/programs/passthru ./output/passthru.vmprog
+python tools/vmprog-packer/vmprog_pack.py --no-sign ./build/programs/passthru ./output/passthru.vmprog
 
 # Use keys from custom directory
-python vmprog_pack.py --keys-dir ./my_keys ./build/programs/passthru ./output/passthru.vmprog
+python tools/vmprog-packer/vmprog_pack.py --keys-dir ./my_keys ./build/programs/passthru ./output/passthru.vmprog
 
-# Create yuv_amplifier.vmprog
-python vmprog_pack.py ./build/programs/yuv_amplifier ./output/yuv_amplifier.vmprog
+# Create compressed package (default) with specific compression level
+python tools/vmprog-packer/vmprog_pack.py --compress-level 6 ./build/programs/passthru ./output/passthru.vmprog
+
+# Create uncompressed package
+python tools/vmprog-packer/vmprog_pack.py --no-compress ./build/programs/passthru ./output/passthru.vmprog
+
+# Validate hardware compatibility during packing
+python tools/vmprog-packer/vmprog_pack.py --hardware rev_b --toml-path programs/passthru/passthru.toml \
+    ./build/programs/passthru ./output/passthru.vmprog
 ```
 
 ## Ed25519 Cryptographic Signing
@@ -82,19 +105,21 @@ Ed25519 keys are stored as raw binary files (32 bytes each):
 - `lzx_official_signed_descriptor_priv.bin` - Private key (keep secret!)
 - `lzx_official_signed_descriptor_pub.bin` - Public key (safe to share)
 
-Default key location: `./keys/` (relative to SDK root)
+Default key location: `keys/` (relative to SDK root)
 
 ### Generating Keys
 
 Use the provided key generation script:
 
 ```bash
-# Generate keys in default location (../../keys from vmprog_pack)
+# Run from tools/vmprog-packer/:
 python generate_ed25519_keys.py --output-dir ../../keys
 
-# Or use the setup script
-cd ../
-./setup_ed25519_signing.sh   # Linux/macOS/WSL2
+# Or run from SDK root:
+python tools/vmprog-packer/generate_ed25519_keys.py --output-dir keys
+
+# Or use the setup script (from SDK root):
+bash scripts/setup_ed25519_signing.sh
 ```
 
 ⚠️ **Security Notice:** Keep private keys secure. Do NOT commit them to version control!
@@ -132,7 +157,7 @@ The tool creates a `.vmprog` file with the following structure:
    - Magic number: 'VMPG' (0x47504D56)
    - Version: 1.0
    - File size, TOC metadata
-   - Package SHA-256 hash
+   - Package BLAKE2b-256 hash
    - Flags (including `signed_pkg` if signed)
 
 2. **Table of Contents (TOC)**
@@ -174,7 +199,7 @@ The tool performs comprehensive validation after package creation:
 - ✓ Reserved fields zeroed
 
 ### Package Hash Validation
-- ✓ Package-wide SHA-256 hash verified
+- ✓ Package-wide BLAKE2b-256 hash verified
 
 ## Exit Codes
 

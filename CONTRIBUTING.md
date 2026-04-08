@@ -120,9 +120,14 @@ cmake --build .
 
 ### Project Structure
 
-- `src/lzx/videomancer/` - Header-only SDK files
+- `src/lzx/videomancer/` - Header-only C++ SDK library
+- `fpga/` - FPGA source library (common IP, core architectures, hardware pin maps)
+- `programs/` - Example VHDL programs (passthru, yuv_amplifier, colorbars, etc.)
+- `tools/` - Development tools (VHDL image tester, TOML editor/validator, vmprog packer)
+- `tests/` - Test suites (C++, Python, VHDL, shell)
+- `docs/` - Format specifications and development guides
+- `keys/` - Ed25519 signing keys
 - `third_party/monocypher/` - Cryptographic library
-- `docs/` - Format specification and documentation
 - `scripts/` - Build and utility scripts
 
 ### Coding Standards
@@ -140,7 +145,7 @@ The SDK follows these conventions:
 - **Header-only library** for easy integration
 - **Packed structures** (`#pragma pack(1)`) for binary compatibility
 - **Little-endian** byte order for all multi-byte integers
-- **Cryptographic security** via Ed25519 and SHA-256
+- **Cryptographic security** via Ed25519 signatures and BLAKE2b-256 hashing
 
 ## License
 

@@ -218,7 +218,7 @@ Package creation and signing:
 - Monocypher library (included in third_party/)
 
 ### Python Tests
-- Python 3.7+
+- Python 3.10+
 - Required packages (auto-installed by setup.sh):
   - toml
   - jsonschema

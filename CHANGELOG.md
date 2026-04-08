@@ -5,6 +5,43 @@ All notable changes to the Videomancer SDK will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.5.0] - 2026-04-08
+
+### Added
+
+- **8 Example Programs** - Moved from proprietary firmware to open-source SDK
+  - `colorbars` — Reference color bar test pattern (EBU 8-bar / SMPTE+PLUGE)
+  - `howler` — Video feedback loop with zoom, decay, and hue rotation
+  - `kintsugi` — Gold crack-repair edge overlay
+  - `mycelium` — Reaction-diffusion organic pattern growth
+  - `perlin` — Gradient noise synthesizer with animated palettes
+  - `pong` — Classic two-player Pong game with AI opponent
+  - `sabattier` — Pseudo-solarization with Mackie line edge glow
+  - `stic` — Intellivision STIC retro 16-color palette quantizer
+  - SDK now ships 10 example programs (up from 2)
+- **AI Program Generation Guide** - New documentation for using Claude AI to create programs
+  - Step-by-step workflow: context setup, prompt structure, review checklists, build/test
+  - SDK DSP library quick reference table
+  - Common issues and iteration patterns
+
+### Changed
+
+- **Documentation Audit** - Comprehensive accuracy and consistency pass across all docs
+  - Fixed entity name references: `program_yuv444` → `program_top` throughout
+  - Fixed type name references: `t_video_stream_yuv444` → `t_video_stream_yuv444_30b`
+  - Fixed hash algorithm descriptions: clarified BLAKE2b-256 (not SHA-256) where applicable
+  - Fixed TOML value_labels syntax: corrected `[[parameter.value_label]]` sub-table → `value_labels` array
+  - Fixed max label count: "256 labels" → "2–16 labels" per parameter
+  - Fixed clock frequencies in CHANGELOG v0.1.0: "SD (30 MHz) / HD (80 MHz)" → "SD (27 MHz) / HD (74.25 MHz)"
+  - Fixed test path in package-signing-guide: points to `tests/python/test_ed25519_signing.py`
+  - Aligned Python version requirement to 3.10+ across all docs and tool READMEs
+  - Expanded program examples lists from 2 to 10 in README and program-development-guide
+  - Expanded project structure in CONTRIBUTING.md from 4 to 10 entries
+- **TOML Schema Compliance** - All SDK program TOML files now pass schema validation
+  - Added `program_type = "processing"` to all 10 programs
+  - Migrated `category` (singular) → `categories` (array) in passthru and yuv_amplifier
+  - All programs validated against JSON schema
+
 ## [Unreleased]
 
 ### Added
@@ -384,7 +421,7 @@ Initial public release of the Videomancer SDK. Complete FPGA development toolcha
 #### Hardware Constraints
 
 - Pin mapping for Videomancer Core rev A and rev B
-- Timing constraints for SD (30 MHz) and HD (80 MHz) modes
+- Timing constraints for SD (27 MHz) and HD (74.25 MHz) modes
 - ICE40HX4K-TQ144 specific PCF files
 
 #### Build Scripts
@@ -397,14 +434,14 @@ Initial public release of the Videomancer SDK. Complete FPGA development toolcha
 #### Python Tools
 
 - **toml_to_config_binary.py** - TOML to binary converter with comprehensive validation (enum bounds, value ranges, ABI checks)
-- **vmprog_pack.py** - Complete `.vmprog` packager with Ed25519 signing support (creates TOC, calculates SHA-256 hashes, validates output)
+- **vmprog_pack.py** - Complete `.vmprog` packager with Ed25519 signing support (creates TOC, calculates BLAKE2b-256 hashes, validates output)
 - **generate_ed25519_keys.py** - Generate Ed25519 key pairs for package signing (32-byte raw keys)
 - **test_ed25519_signing.py** - Test suite for Ed25519 signing functionality
 - **test_converter.py** / **test_conversion.sh** - Test suite for TOML converter
 - **test_vmprog_pack.sh** - Test suite for packaging tool
 - **setup_ed25519_signing.sh** - One-step signing setup script (Linux/macOS/WSL2)
 - Example TOML configuration demonstrating 3 parameters
-- Python 3.7+ compatibility (standard library only)
+- Python 3.10+ compatibility (standard library only)
 - Python `cryptography` library integration for Ed25519 operations
 
 #### Example Programs

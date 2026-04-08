@@ -1013,7 +1013,7 @@ Example:
     parser.add_argument('--no-sign', action='store_true',
                        help='Do not sign the package (unsigned package)')
     parser.add_argument('--keys-dir', type=Path, default=None,
-                       help='Directory containing Ed25519 keys (default: ./keys)')
+                       help='Directory containing Ed25519 keys (default: <SDK_ROOT>/keys/)')
     parser.add_argument('--hardware', type=str, default=None,
                        help='Hardware name to build for (e.g., rev_a). Will validate against hardware_compatibility field.')
     parser.add_argument('--toml-path', type=Path, default=None,

@@ -15,7 +15,14 @@ The public key can be safely distributed and is used by Videomancer firmware to 
 
 ## Generating New Keys
 
-To generate a new Ed25519 key pair, you can use the following Python script:
+To generate a new Ed25519 key pair, use the provided script from the SDK root:
+
+```bash
+# From SDK root:
+python tools/vmprog-packer/generate_ed25519_keys.py --output-dir keys
+```
+
+Or use the inline Python script below:
 
 ```python
 #!/usr/bin/env python3
@@ -53,10 +60,12 @@ print(f"Public key:  {public_bytes.hex()}")
 
 ## Using Keys with vmprog_pack
 
-The `vmprog_pack.py` script automatically looks for keys in this directory and signs packages by default:
+The `vmprog_pack.py` script automatically looks for keys in this directory (`<SDK_ROOT>/keys/`) and signs packages by default. All commands below assume you are running from the SDK root:
 
 ```bash
-# Sign package (default behavior)
+# From SDK root:
+
+# Sign package (default behavior — keys auto-discovered)
 python tools/vmprog-packer/vmprog_pack.py ./build/programs/passthru ./output/passthru.vmprog
 
 # Create unsigned package

@@ -70,7 +70,7 @@ random data), the bitstream is stored uncompressed with no flag set.
 - `uncompressed_size` field at offset 48: original size before compression
   (0 for uncompressed entries)
 - `size` field: stores the compressed size (for seek/read operations)
-- `sha256` hash: computed over compressed bytes as stored
+- `sha256` hash: BLAKE2b-256, computed over compressed bytes as stored
 
 ### Signed Descriptor
 

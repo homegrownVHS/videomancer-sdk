@@ -448,7 +448,7 @@ Changes:
 2. Store the **raw DEFLATE** bytes (strip the 2-byte zlib header by using `wbits=-10` in Python's `zlib.compress`)
 3. Set `compressed_deflate` flag on the TOC entry
 4. Store `uncompressed_size` in the TOC entry
-5. Hash the **compressed** bytes for the TOC entry SHA-256 and the signed descriptor
+5. Hash the **compressed** bytes for the TOC entry BLAKE2b-256 hash and the signed descriptor
 6. Set `has_compressed_sections` on the header if any bitstream was compressed
 7. Bump `VERSION_MINOR` to `1`
 
@@ -501,7 +501,7 @@ raw DEFLATE (RFC 1951) with a 1 KB sliding window (wbits=10).
 
 ### Hash Verification
 
-All hashes (TOC entry SHA-256, signed descriptor artifact hashes) are computed
+All hashes (TOC entry BLAKE2b-256, signed descriptor artifact hashes) are computed
 over the **compressed** payload bytes as stored in the file. Decompression is
 NOT required for integrity or signature verification.
 

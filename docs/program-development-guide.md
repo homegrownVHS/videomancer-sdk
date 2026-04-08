@@ -20,21 +20,21 @@ Create VHDL-based video processing programs for Videomancer FPGA hardware.
 
 ### The Standard Interface
 
-All Videomancer programs implement the same `program_yuv444` entity interface:
+All Videomancer programs implement architectures of the `program_top` entity:
 
 ```vhdl
-entity program_yuv444 is
+entity program_top is
     port (
-        clk             : in std_logic;                    -- System clock (74.25 MHz)
+        clk             : in std_logic;                    -- Pixel clock
         registers_in    : in t_spi_ram;                    -- Control registers via SPI
-        data_in         : in t_video_stream_yuv444;        -- Input video stream
-        data_out        : out t_video_stream_yuv444        -- Output video stream
+        data_in         : in t_video_stream_yuv444_30b;    -- Input video stream
+        data_out        : out t_video_stream_yuv444_30b    -- Output video stream
     );
-end entity program_yuv444;
+end entity program_top;
 ```
 
 **Key Points:**
-- **Clock**: 74.25 MHz pixel clock (for HD) or 13.5MHz pixel clock (for SD)
+- **Clock**: 74.25 MHz pixel clock (HD) or 13.5 MHz pixel clock (SD)
 - **Registers**: Control registers 0-7 for parameters, register 8 for video timing ID
 - **Video Format**: YUV 4:4:4, 10-bit per channel (0-1023)
 - **Sync Signals**: hsync_n, vsync_n, field_n, avid (active video flag)
@@ -54,7 +54,7 @@ programs/
 
 ### Required Files
 
-1. **Main VHDL file**: Implements the `program_yuv444` architecture
+1. **Main VHDL file**: Implements an architecture of `program_top`
 2. **TOML config**: Defines program metadata and register mappings
 
 ## Development Workflow
@@ -115,7 +115,7 @@ library work;
 use work.core_pkg.all;
 use work.video_timing_pkg.all;
 
-architecture your_program of program_yuv444 is
+architecture your_program of program_top is
     -- Constants
     constant C_LATENCY_CLKS : integer := ...;
 
@@ -353,8 +353,18 @@ troubleshooting.
 
 ## Examples
 
-- `programs/passthru` - Minimal reference (1 clock latency)
+The SDK includes ten example programs of increasing complexity:
+
+- `programs/passthru` - Minimal pass-through (1 clock latency)
 - `programs/yuv_amplifier` - Multi-stage pipeline with submodules
+- `programs/colorbars` - Reference color bar generator (EBU/SMPTE)
+- `programs/pong` - Classic two-player Pong with AI opponent
+- `programs/perlin` - Gradient noise synthesizer with animated palettes
+- `programs/mycelium` - Reaction-diffusion organic pattern growth
+- `programs/sabattier` - Pseudo-solarization with Mackie line edge glow
+- `programs/stic` - Intellivision STIC retro 16-color palette quantizer
+- `programs/howler` - Video feedback loop with zoom, decay, and hue rotation
+- `programs/kintsugi` - Gold crack-repair edge overlay
 
 ## Reference
 
@@ -364,4 +374,5 @@ troubleshooting.
 - [ABI Format](abi-format.md)
 - [Package Signing](package-signing-guide.md)
 - [VHDL Image Tester](../tools/vhdl-image-tester/README.md)
+- [Generating Programs with Claude AI](ai-program-generation-guide.md)
 

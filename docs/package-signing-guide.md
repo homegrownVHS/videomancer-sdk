@@ -4,6 +4,8 @@ Ed25519 cryptographic signing for Videomancer program packages (`.vmprog` files)
 
 ## Quick Start
 
+All commands below assume you are running from the **SDK root directory**.
+
 ### 1. Install Dependencies
 
 ```bash
@@ -17,26 +19,29 @@ pip3 install cryptography
 ### 2. Generate Keys (One-time)
 
 ```bash
-# Use setup script
-cd scripts/
-./setup_ed25519_signing.sh
+# From SDK root:
+bash scripts/setup_ed25519_signing.sh
 
-# Or manually
-cd tools/vmprog-packer
+# Or manually from SDK root:
+python tools/vmprog-packer/generate_ed25519_keys.py --output-dir keys
+
+# Or from tools/vmprog-packer/:
 python generate_ed25519_keys.py --output-dir ../../keys
 ```
 
 ### 3. Create Packages
 
 ```bash
-# Signed package (default)
-python vmprog_pack.py build/programs/passthru output/passthru.vmprog
+# From SDK root:
+
+# Signed package (default — keys auto-discovered from <SDK_ROOT>/keys/)
+python tools/vmprog-packer/vmprog_pack.py build/programs/passthru output/passthru.vmprog
 
 # Unsigned package
-python vmprog_pack.py --no-sign build/programs/passthru output/passthru.vmprog
+python tools/vmprog-packer/vmprog_pack.py --no-sign build/programs/passthru output/passthru.vmprog
 
 # Custom key location
-python vmprog_pack.py --keys-dir my_keys build/programs/passthru output/passthru.vmprog
+python tools/vmprog-packer/vmprog_pack.py --keys-dir my_keys build/programs/passthru output/passthru.vmprog
 ```
 
 ## Key Management
@@ -54,13 +59,13 @@ python vmprog_pack.py --keys-dir my_keys build/programs/passthru output/passthru
 
 ## What Gets Signed
 
-The signature covers:
-- Program configuration hash
-- All FPGA bitstream hashes
-- Artifact count and metadata
+The Ed25519 signature covers a **signed descriptor** containing:
+- BLAKE2b-256 hash of the program configuration
+- BLAKE2b-256 hashes of all FPGA bitstream artifacts
+- Artifact count and flags
 - Build identifier
 
-This prevents modification of config or bitstreams.
+This prevents modification of config or bitstreams after signing.
 
 ## Troubleshooting
 
@@ -71,19 +76,20 @@ pip install cryptography
 
 **"Private key not found"**
 ```bash
-python generate_ed25519_keys.py --output-dir ../../keys
+# From SDK root:
+python tools/vmprog-packer/generate_ed25519_keys.py --output-dir keys
 ```
 
 **Package created but unsigned**
-- Verify keys exist in `keys/` directory
+- Verify keys exist in `keys/` directory (relative to SDK root)
 - Check `cryptography` is installed
-- Try explicit key directory: `--keys-dir ../../keys`
+- Try explicit key directory: `--keys-dir keys`
 
 ## Testing
 
 ```bash
-cd tools/vmprog-packer
-python test_ed25519_signing.py
+# From SDK root:
+python tests/python/test_ed25519_signing.py
 ```
 
 ## Technical Details
