@@ -84,6 +84,9 @@ architecture rtl of core_top is
   signal s_spi_ram_d : t_spi_ram := (others => (others => '0'));
   signal s_hsync_n_d : std_logic := '0';
   signal s_hsync_n_event : std_logic := '0';
+  signal s_vsync_n_d : std_logic := '1';
+  signal s_vsync_n_event : std_logic := '0';
+  signal s_vsync_latch_en : std_logic := '0';
   signal s_video_timing_id : t_video_timing_id := (others => '0');
   signal s_video_in : t_video_stream_yuv422_20b;
   signal s_program_in : t_video_stream_yuv444_30b;
@@ -276,17 +279,30 @@ begin
   begin
     if rising_edge(vid_clk) then
       s_hsync_n_d <= s_program_in.hsync_n;
+      s_vsync_n_d <= s_program_in.vsync_n;
     end if;
   end process;
 
   s_hsync_n_event <= s_hsync_n_d and not s_program_in.hsync_n;
+  s_vsync_n_event <= s_vsync_n_d and not s_program_in.vsync_n;
 
-  -- Shadow RAM process with proper block RAM inference
+  -- VSYNC latch enable: register 8 bit 9 (read directly from un-latched SPI
+  -- RAM so the mode takes effect immediately).  When set, the shadow register
+  -- bank latches on the VSYNC falling edge (once per frame) instead of HSYNC
+  -- (once per line).  This eliminates mid-frame parameter tears at the cost
+  -- of one frame of latency.  Default is 0 (HSYNC / per-line latching) for
+  -- backward compatibility with per-line modulation.
+  s_vsync_latch_en <= s_spi_ram(8)(9);
+
+  -- Shadow RAM process: latches SPI register values for glitch-free delivery
+  -- to the program.  Latch edge is selectable between HSYNC (per-line, for
+  -- per-line modulation) and VSYNC (per-frame, for tear-free parameter
+  -- updates in remote / automation modes).
   process (vid_clk)
   begin
     if rising_edge(vid_clk) then
-      if s_hsync_n_event = '1' then
-        -- Copy entire RAM on hsync event
+      if (s_vsync_latch_en = '0' and s_hsync_n_event = '1') or
+         (s_vsync_latch_en = '1' and s_vsync_n_event = '1') then
         for i in 0 to 8 loop
           s_spi_ram_d(i) <= s_spi_ram(i);
         end loop;
